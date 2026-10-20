@@ -12,7 +12,7 @@ After the June 2026 Orchard soundness bug, NU6.3 activated on mainnet at block 3
 Since then, "No new value may enter the Orchard pool" and ordinary payments inside Orchard are disabled (ZIP 258).
 Every holder has to move funds across to the new Ironwood pool.
 Doing it naively reveals your balance.
-ZIP 318 defines the private way: split funds into standard amounts, pre-sign everything, then send each piece over weeks at random times, proved against shared anchors.
+ZIP 318 defines the private way: split funds into standard amounts, pre-sign everything, then send each piece separately at random times (mean 66 blocks, about 82 minutes, apart; never more than 576 blocks, about 12 hours), proved against shared anchors.
 That works only if something is running at each scheduled time.
 Phone wallets cannot do that reliably, because iOS and Android stop background apps, so Zodl's migration depends on you opening the app.
 Hardware-wallet and cold-storage holders have nothing at all.
@@ -24,7 +24,8 @@ Hardware-wallet and cold-storage holders have nothing at all.
 
 - You install it like any app.
 - You connect your wallet, review the plan, and sign everything once.
-- Then FERRY sits in your menu bar or system tray for a few weeks, sending each piece at its scheduled time while your laptop is on.
+- Then FERRY sits in your menu bar or system tray, typically for a day or two, sending each piece at its scheduled time while your laptop is on.
+  Regtest run 2 moved 750 REG in 13 crossings over about 2,000 blocks, which is about 42 hours at mainnet's 75-second block time.
 - It holds your view-only key, never your spending key (except briefly in seed mode, below).
 - Every transaction is already signed to your own Ironwood address, so FERRY cannot send your money anywhere else.
 
@@ -97,7 +98,7 @@ The app says so before you type anything.
 
 Ada holds 40.37 ZEC in Orchard in Zodl on her phone.
 She uses a MacBook every day.
-She has not migrated because Zodl wants her to keep opening the app for weeks, and she has read that a careless migration reveals her balance.
+She has not migrated because Zodl wants her to keep opening the app until it finishes, and she has read that a careless migration reveals her balance.
 
 ### 1. Install (2 minutes)
 
@@ -120,7 +121,7 @@ FERRY asks the engine for a plan and shows:
 - **Runs:** the engine plans one run at a time and drops the smallest pieces when the fees do not fit the balance (it never swaps in smaller pieces, so the amounts stay a function of the balance alone).
   When that happens, FERRY says so up front: "Most of your balance moves in this run. About X ZEC is left for a short second run, which you will sign once more when this one finishes."
   Seen in regtest run 1: a round 750 left no fee slack, so run 1 crossed 500 + 200 and run 2 covers the remaining 49.99.
-- **Timeline:** preparation (a few hours), then one crossing every few days on average, finishing in about N weeks if the laptop is on most days.
+- **Timeline:** preparation (a few hours), then one crossing about every 82 minutes on average (never more than 12 hours apart), finishing in a day or two if the laptop stays on. Every hour the laptop is off adds to that.
 - **Fees:** total network fees.
 - **What a stranger can see:** a few standard-size crossings at random times, the same shape as everyone else's.
 - **What they cannot see:** that the crossings belong to one person, or her total.
@@ -139,7 +140,7 @@ Ada taps **Start migration**. This is her consent.
 1. FERRY broadcasts the preparation transactions, which split her notes into the exact amounts and send only to herself.
 2. It waits for them to be mined, then for the next shared anchor boundary (every 144 blocks, about 3 hours).
 
-### 6. Crossing (automatic, weeks)
+### 6. Crossing (automatic, hours to a couple of days)
 
 At each scheduled height, while the laptop is on, FERRY:
 
@@ -204,7 +205,7 @@ What else the naive way leaks:
 - The anchor in the proof shows how recently the wallet synced.
 - If someone splits into odd amounts and sends them close together, the pieces still add up to the balance.
 
-What ZIP 318 changes: standard amounts that many wallets share, random times over weeks, shared anchors, a broadcast server different from the sync server.
+What ZIP 318 changes: standard amounts that many wallets share, random times, shared anchors, a broadcast server different from the sync server.
 An observer sees many identical 10 ZEC crossings and cannot tell which belong together.
 
 ## Architecture
@@ -253,7 +254,7 @@ Machine notes: 16 GB RAM and 8 cores are fine.
 Free disk is about 24 GB, which is tight: Rust build folders can take 10 to 15 GB.
 Docker is installed but its daemon is not running.
 
-Demo time trick: on regtest we mine blocks on demand, so "weeks" of crossings pass in minutes.
+Demo time trick: on regtest we mine blocks on demand, so a day or two of crossings passes in minutes.
 The scheduling delays and anchor bucket are parameters, shortened in a clearly labelled "regtest demo" setting.
 
 ## Demo (real transactions, regtest)
