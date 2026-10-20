@@ -140,7 +140,7 @@ case "${1:-}" in
     done
     echo "height $(height)"
     ;;
-  height) height ;;
+  height) echo "$(height)" ;;
   rpc) rpc "${2:?method}" "${3:-[]}"; echo ;;
   stop)
     stop_lwd
