@@ -100,10 +100,10 @@ index ac3b06e..d8f9e69 100644
                          .map_err(|e| anyhow!("proving transaction {} failed: {e}", u32::from(id)))?
 diff --git a/src/commands/migration/broadcast.rs b/src/commands/migration/broadcast.rs
 new file mode 100644
-index 0000000..b74e14e
+index 0000000..0158f88
 --- /dev/null
 +++ b/src/commands/migration/broadcast.rs
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,125 @@
 +//! `migration broadcast`: submit the migration transaction that is proved and due, through a
 +//! lightwalletd server, and record the outcome in the migration state.
 +//!
@@ -121,7 +121,7 @@ index 0000000..b74e14e
 +    proto::service,
 +};
 +use zcash_client_sqlite::{WalletDb, util::SystemClock};
-+use zcash_pool_migration::engine::{PoolMigrationRead, PoolMigrationWrite};
++use zcash_pool_migration::engine::{MigrationTxKind, PoolMigrationRead, PoolMigrationWrite};
 +use zcash_pool_migration::satisfiability::{
 +    AdvanceConfig, DuenessTargets, ReorgSettleDepth, advance_migration,
 +};
@@ -188,6 +188,18 @@ index 0000000..b74e14e
 +            return Ok(());
 +        };
 +        let id = *id;
++        // A scheduler needs to know whether this crosses the turnstile (a transfer) or not (a
++        // preparation): ZIP 318 spaces pool-crossing broadcasts with fresh random delays.
++        let kind = match state
++            .transactions()
++            .iter()
++            .find(|t| t.id() == id)
++            .map(|t| t.kind())
++        {
++            Some(MigrationTxKind::Transfer { .. }) => "transfer",
++            Some(MigrationTxKind::Preparation { .. }) => "preparation",
++            None => return Err(anyhow!("migration transaction {} not found", u32::from(id))),
++        };
 +
 +        let tx = store.take_transaction_for_broadcast(&mut rng, &state, id)?;
 +        let txid = tx.txid();
@@ -200,7 +212,10 @@ index 0000000..b74e14e
 +        if response.error_code == 0 {
 +            state.mark_broadcast(id);
 +            store.replace_migration(&state)?;
-+            println!("Broadcast migration transaction {} as {txid}", u32::from(id));
++            println!(
++                "Broadcast migration {kind} {} as {txid}",
++                u32::from(id)
++            );
 +            Ok(())
 +        } else {
 +            state.report_broadcast_failure(id, tip);
