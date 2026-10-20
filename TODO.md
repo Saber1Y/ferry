@@ -37,8 +37,8 @@ Legend: `[x]` done and verified, `[ ]` to do, **KILL** = decision point.
 
 ## Found in regtest run 1 (fix in FERRY)
 
-- [ ] Scheduler must not broadcast two due crossings together (both went out at 744 and mined at 745)
-- [ ] Investigate the 49.99 REG left in Orchard (plan only crossed 500 + 200)
+- [ ] Scheduler must not broadcast two due crossings together (seen at 744 in run 1 and again at 2164 in the follow-up run)
+- [x] 49.99 REG left in Orchard: the engine defers pieces when fees do not fit; fixed with automatic follow-up runs (final: 749.98 Ironwood, 0.00925 Orchard)
 - [ ] Driver: stop when the migration completes (done in `drive.sh`)
 
 ## Oct 22: Tauri app shell
