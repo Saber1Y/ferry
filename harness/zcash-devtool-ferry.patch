@@ -1,0 +1,230 @@
+diff --git a/src/commands/migration.rs b/src/commands/migration.rs
+index 10624bd..17bd550 100644
+--- a/src/commands/migration.rs
++++ b/src/commands/migration.rs
+@@ -1,6 +1,7 @@
+ use clap::Subcommand;
+ 
+ pub(crate) mod advance;
++pub(crate) mod broadcast;
+ pub(crate) mod commit;
+ pub(crate) mod plan;
+ pub(crate) mod status;
+@@ -23,4 +24,8 @@ pub(crate) enum Command {
+     /// ready. Stops (without erroring) at the first transaction that's ready to broadcast or
+     /// needs rebuilding after expiry, since those steps aren't implemented yet.
+     Advance(advance::Command),
++
++    /// Broadcast the migration transaction that is proved and due, through a lightwalletd
++    /// server, and record the outcome (added for FERRY).
++    Broadcast(broadcast::Command),
+ }
+diff --git a/src/commands/migration/advance.rs b/src/commands/migration/advance.rs
+index ac3b06e..d8f9e69 100644
+--- a/src/commands/migration/advance.rs
++++ b/src/commands/migration/advance.rs
+@@ -3,7 +3,8 @@ use clap::Args;
+ use rand::{rand_core::UnwrapErr, rngs::SysRng};
+ use uuid::Uuid;
+ 
+-use zcash_client_backend::data_api::{Account as _, WalletRead};
++use shardtree::{error::ShardTreeError, store::ShardStore};
++use zcash_client_backend::data_api::{Account as _, WalletCommitmentTrees, WalletRead};
+ use zcash_client_sqlite::{WalletDb, util::SystemClock};
+ use zcash_pool_migration::engine::{
+     MigrationTxKind, PoolMigrationRead, PoolMigrationWrite, ProveOutcome, prove_preparation,
+@@ -25,6 +26,14 @@ use super::store::{migration_store, open_connection};
+ /// crate's own anchor-depth gate (`PROVABLE_ANCHOR_DEPTH`) uses at the 75-second block target.
+ const REORG_SETTLE_DEPTH: ReorgSettleDepth = ReorgSettleDepth::new(10);
+ 
++/// Minimum confirmations for a preparation transaction's anchor (FERRY).
++/// ZIP 318 anchors preparations at the wallet's ordinary near-tip depth. The anchor must also be a
++/// height the wallet actually holds an Orchard tree checkpoint for: the wallet does not checkpoint
++/// every block (not the block it scanned last, nor blocks without Orchard commitments inside a
++/// scanned batch), so anchoring at the scanned tip fails with "a commitment tree has no root at
++/// the anchor checkpoint". The anchor is therefore the newest checkpoint this deep or deeper.
++const PREPARATION_ANCHOR_CONFIRMATIONS: u32 = 3;
++
+ /// Options accepted for the `migration advance` command.
+ #[derive(Debug, Args)]
+ pub(crate) struct Command {
+@@ -69,6 +78,30 @@ impl Command {
+         // transaction could be mined in.
+         let targets = DuenessTargets::new(scanned + 1, tip + 1);
+ 
++        let preparation_anchor = {
++            let mut wallet_db =
++                WalletDb::from_connection(&mut conn, params, SystemClock, UnwrapErr(SysRng));
++            let deepest_allowed = scanned - (PREPARATION_ANCHOR_CONFIRMATIONS - 1);
++            wallet_db
++                .with_orchard_tree_mut(|tree| {
++                    let store = tree.store();
++                    let mut depth = 0;
++                    loop {
++                        match store
++                            .get_checkpoint_at_depth(depth)
++                            .map_err(ShardTreeError::Storage)?
++                        {
++                            Some((height, _)) if height <= deepest_allowed => {
++                                return Ok(Some(height));
++                            }
++                            Some(_) => depth += 1,
++                            None => return Ok(None),
++                        }
++                    }
++                })
++                .map_err(|e: ShardTreeError<_>| anyhow!("reading the Orchard tree failed: {e}"))?
++        };
++
+         let mut rng = UnwrapErr(SysRng);
+         let config = AdvanceConfig::new(REORG_SETTLE_DEPTH);
+ 
+@@ -122,7 +155,17 @@ impl Command {
+                             // dependencies are confirmed mined at or below it by the time this
+                             // step is offered.
+                             MigrationTxKind::Preparation { .. } => {
+-                                prove_preparation(&mut prover, &mut state, id, scanned)
++                                prove_preparation(
++                                    &mut prover,
++                                    &mut state,
++                                    id,
++                                    preparation_anchor.ok_or_else(|| {
++                                        anyhow!(
++                                            "the wallet holds no Orchard tree checkpoint deep \
++                                             enough to anchor a preparation yet; sync further"
++                                        )
++                                    })?,
++                                )
+                             }
+                         }
+                         .map_err(|e| anyhow!("proving transaction {} failed: {e}", u32::from(id)))?
+diff --git a/src/commands/migration/broadcast.rs b/src/commands/migration/broadcast.rs
+new file mode 100644
+index 0000000..b74e14e
+--- /dev/null
++++ b/src/commands/migration/broadcast.rs
+@@ -0,0 +1,110 @@
++//! `migration broadcast`: submit the migration transaction that is proved and due, through a
++//! lightwalletd server, and record the outcome in the migration state.
++//!
++//! Added for FERRY. `migration advance` stops at this step ("broadcasting isn't wired up in this
++//! command yet"); this command performs it with `PoolMigrations::take_transaction_for_broadcast`,
++//! then `MigrationState::mark_broadcast` on success or `report_broadcast_failure` on rejection.
++
++use anyhow::anyhow;
++use clap::Args;
++use rand::{rand_core::UnwrapErr, rngs::SysRng};
++use uuid::Uuid;
++
++use zcash_client_backend::{
++    data_api::{Account as _, WalletRead},
++    proto::service,
++};
++use zcash_client_sqlite::{WalletDb, util::SystemClock};
++use zcash_pool_migration::engine::{PoolMigrationRead, PoolMigrationWrite};
++use zcash_pool_migration::satisfiability::{
++    AdvanceConfig, DuenessTargets, ReorgSettleDepth, advance_migration,
++};
++use zcash_pool_migration::state::AdvanceStep;
++
++use crate::{
++    commands::select_account, config::get_wallet_network, data::get_db_paths,
++    remote::ConnectionArgs,
++};
++
++use super::store::{migration_store, open_connection};
++
++/// Same settle margin `migration advance` uses.
++const REORG_SETTLE_DEPTH: ReorgSettleDepth = ReorgSettleDepth::new(10);
++
++/// Options accepted for the `migration broadcast` command.
++#[derive(Debug, Args)]
++pub(crate) struct Command {
++    /// The UUID of the account whose due migration transaction to broadcast
++    account_id: Option<Uuid>,
++
++    /// The lightwalletd server to broadcast through. Use a different server from the one the
++    /// wallet syncs from (ZIP 318: keep synchronization and broadcast unlinkable).
++    #[command(flatten)]
++    connection: ConnectionArgs,
++}
++
++impl Command {
++    pub(crate) async fn run(self, wallet_dir: Option<String>) -> anyhow::Result<()> {
++        let params = get_wallet_network(wallet_dir.as_ref())?;
++        let (_, db_path) = get_db_paths(wallet_dir.as_ref());
++        let mut conn = open_connection(&db_path)?;
++
++        let (account_id, scanned, tip) = {
++            let wallet_db =
++                WalletDb::from_connection(&mut conn, params, SystemClock, UnwrapErr(SysRng));
++            let account = select_account(&wallet_db, self.account_id)?;
++            let scanned = wallet_db
++                .block_fully_scanned()
++                .map_err(|e| anyhow!("wallet read failed: {e:?}"))?
++                .ok_or_else(|| anyhow!("wallet has not scanned any blocks yet"))?
++                .block_height();
++            let tip = wallet_db
++                .chain_height()
++                .map_err(|e| anyhow!("wallet read failed: {e:?}"))?
++                .ok_or_else(|| anyhow!("wallet is not synced"))?;
++            (account.id(), scanned, tip)
++        };
++        let targets = DuenessTargets::new(scanned + 1, tip + 1);
++        let config = AdvanceConfig::new(REORG_SETTLE_DEPTH);
++        let mut rng = UnwrapErr(SysRng);
++
++        let mut store = migration_store(params, &mut conn, account_id)?;
++        let Some(mut state) = store.get_migration()? else {
++            println!("No migration in progress.");
++            return Ok(());
++        };
++        let advance = advance_migration(&mut store, &mut state, targets, &config, &mut rng)?;
++        let AdvanceStep::Broadcast { id } = advance.step() else {
++            println!(
++                "Nothing is due to broadcast. Run `migration advance` to prove what is ready, or \
++                 `migration status` to see what is next."
++            );
++            return Ok(());
++        };
++        let id = *id;
++
++        let tx = store.take_transaction_for_broadcast(&mut rng, &state, id)?;
++        let txid = tx.txid();
++        let mut raw_tx = service::RawTransaction::default();
++        tx.write(&mut raw_tx.data)?;
++
++        let mut client = self.connection.connect(params, wallet_dir.as_ref()).await?;
++        let response = client.send_transaction(raw_tx).await?.into_inner();
++
++        if response.error_code == 0 {
++            state.mark_broadcast(id);
++            store.replace_migration(&state)?;
++            println!("Broadcast migration transaction {} as {txid}", u32::from(id));
++            Ok(())
++        } else {
++            state.report_broadcast_failure(id, tip);
++            store.replace_migration(&state)?;
++            Err(anyhow!(
++                "node rejected migration transaction {} ({txid}): code {}: {}",
++                u32::from(id),
++                response.error_code,
++                response.error_message
++            ))
++        }
++    }
++}
+diff --git a/src/main.rs b/src/main.rs
+index 8d75ad8..05d2be9 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -274,6 +274,9 @@ fn main() -> Result<(), anyhow::Error> {
+                 commands::migration::Command::Commit(command) => command.run(wallet_dir),
+                 commands::migration::Command::Status(command) => command.run(wallet_dir),
+                 commands::migration::Command::Advance(command) => command.run(wallet_dir),
++                commands::migration::Command::Broadcast(command) => {
++                    command.run(wallet_dir).await
++                }
+             },
+             #[cfg(feature = "pczt-qr")]
+             Command::Keystone(commands::Keystone {
