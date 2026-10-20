@@ -1,0 +1,27 @@
+[h=341] broadcast session: Broadcast migration preparation 0 as d344cfeaf01eface62f3dcbcd11dd92bb073587e271103be7389a50f1ec9246e
+[h=351] broadcast session: Broadcast migration preparation 1 as 4db01db8bcbea807f5e90469b394631726d002f61f8f73eb49acc9ad0798aec4
+[h=361] broadcast session: Broadcast migration preparation 2 as e94f33f140278e3aada760f8b1777ac93124f64537809cb07b4c02093710e7e3
+[h=366] broadcast session: Broadcast migration preparation 3 as 447889bf57944419102f5ce79bca835f08f22d0afa612637ac6910114d3154b0
+[h=381] broadcast session: Broadcast migration preparation 4 as 204c59efa2cea5298648e23691f7463b702cd6ad8ce77be0c431a79850be2696
+[h=391] broadcast session: Broadcast migration preparation 5 as aad4465ade7865a713d732951fee40bb7be50d901e462df68e3d2472737ebf42
+[h=396] broadcast session: Broadcast migration preparation 6 as 3147e75cf2aadd4c13a09727f4e2bfde4c384944649c0d888d55e860b5b7d00e
+[h=406] broadcast session: Broadcast migration preparation 7 as 76a40df5f18627c57facaf159aa6bf0ca303f7c2ddfae2fc048de516ed13498b
+[h=416] broadcast session: Broadcast migration preparation 8 as a0cbff24f0c38d6bf0c837636b795b793fff8eb06affb4e2eb028cdf03f9156e
+[h=446] broadcast session: Broadcast migration preparation 9 as 1fa5daeab3236d780f1d321b01772e5f467d0ae4c276cc4ba7c1bec5335af9a3
+[h=846] broadcast session: Broadcast migration transfer 10 as f8111cb05f7e5ca8c1fbbf0d08ab225e4173741fd8a2bf9cdd6d4415ea6f33b6 (next crossing no earlier than 955, delay 109)
+[h=956] broadcast session: Broadcast migration transfer 11 as 4fc29badaa543c11666a2c0b61fee08cb7361185bf05e1c1debceab3c789a330 (next crossing no earlier than 1084, delay 128)
+[h=1086] run complete, follow-up run for the deferred balance:   Crossing values: [Zatoshis(2000000000), Zatoshis(2000000000), Zatoshis(500000000), Zatoshis(200000000), Zatoshis(200000000), Zatoshis(50000000), Zatoshis(20000000), Zatoshis(20000000), Zatoshis(5000000), Zatoshis(2000000), Zatoshis(1000000)]
+[h=1086] Migration committed: status=committed, 12 transaction(s) recorded
+[h=1111] broadcast session: Broadcast migration preparation 0 as 3dc3ad0b660632f3ea05ae19ad3f76aeb7eafa1531b1862b01d0c13fb7988268
+[h=1401] broadcast session: Broadcast migration transfer 5 as 99c9733b20978d53a03cc1a05fe01b4ff4be78ad2997bfefe08c40beb96f9b21 (next crossing no earlier than 1449, delay 48)
+[h=1451] broadcast session: Broadcast migration transfer 3 as fcfac92a0a7d266c89306ed17944ad36cdd16e514949ac8d901b0ec6ed1e1ee7 (next crossing no earlier than 1513, delay 62)
+[h=1516] broadcast session: Broadcast migration transfer 9 as 648c55a8bd388a2939840fcee62dce63155d6674c75433f461ad88b71c75e384 (next crossing no earlier than 1537, delay 21)
+[h=1586] broadcast session: Broadcast migration transfer 6 as 413742fc242ee1cf2bd2e295769f9db10271f20373c55b374c3a294466ac2987 (next crossing no earlier than 1591, delay 5)
+[h=1681] broadcast session: Broadcast migration transfer 11 as 8a470459c0ac2e2ebeed2c717162507b25167b59f2c3aa9263277063fdb01944 (next crossing no earlier than 1790, delay 109)
+[h=1791] broadcast session: Broadcast migration transfer 4 as 20e1909189e4c96f06b30e73124552f69199f42225d40fd146da512572310e79 (next crossing no earlier than 1847, delay 56)
+[h=1891] broadcast session: Broadcast migration transfer 8 as d42fa967ee591c1a41bb4c464f528248d5a465085f91186c46754326440d033d (next crossing no earlier than 1896, delay 5)
+[h=1896] broadcast session: Broadcast migration transfer 10 as a67f6b9aa920ab534ca6c6add55e19bebb38ca1f345103e8cb8609b743d89e98 (next crossing no earlier than 1907, delay 11)
+[h=1966] broadcast session: Broadcast migration transfer 2 as e9ed5a5bf23d656a385fd5489f28ae2ff979465162c66365cd1d10eadf1002d7 (next crossing no earlier than 1991, delay 25)
+[h=2001] broadcast session: Broadcast migration transfer 7 as 8edd5af7bf703139c9f4abfe52651da4b82d458903cfdde5aa55bd40aa223ad7 (next crossing no earlier than 2320, delay 319)
+[h=2321] broadcast session: Broadcast migration transfer 1 as 549397f503cbdae5d5b6b296828de21af7850f847825c042dcc9a3a0c56a0231 (next crossing no earlier than 2335, delay 14)
+[h=2336] migration complete
