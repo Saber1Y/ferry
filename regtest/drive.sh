@@ -3,7 +3,8 @@
 # This is the prototype of FERRY's scheduler loop:
 #   mine a few blocks -> sync from server A -> prove what is due -> broadcast through server B.
 #
-# Usage: drive.sh <wallet_dir> [max_height] [blocks_per_step]
+# Usage: [IDENTITY=<age identity file>] drive.sh <wallet_dir> [max_height] [blocks_per_step]
+# With IDENTITY set, follow-up runs for deferred balance are planned and signed automatically.
 # No `set -e`: a step that has nothing to do exits non-zero, and the loop must keep going.
 set -u
 
@@ -33,6 +34,15 @@ while :; do
     elif echo "$b" | grep -q 'Nothing is due'; then
       break
     elif echo "$b" | grep -q 'No migration in progress'; then
+      # The engine plans one run at a time. When a balance leaves no slack for fees, the
+      # smallest denominations are deferred and stay in Orchard. ZIP 318 only leaves dust below
+      # 0.01 ZEC, so plan and commit follow-up runs until nothing migratable is left.
+      plan=$("$DT" migration -w "$W" plan 2>&1 | quiet)
+      if [ -n "${IDENTITY:-}" ] && echo "$plan" | grep -q 'Crossing values: \[Z'; then
+        echo "[h=$h] run complete, follow-up run for the deferred balance: $(echo "$plan" | grep 'Crossing values')"
+        "$DT" migration -w "$W" commit -i "$IDENTITY" 2>&1 | quiet | sed "s/^/[h=$h] /"
+        break
+      fi
       echo "[h=$h] migration complete"
       exit 0
     else
