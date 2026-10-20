@@ -107,6 +107,13 @@ stop_lwd() {
 case "${1:-}" in
   start)
     render_configs "${2:-}"
+    # zebrad writes its newest (non-finalized) blocks to disk only every few seconds. Stopping it
+    # right after mining silently rolls those blocks back, and they get re-mined to whatever
+    # address the next start uses. Wait for the backup, then stop it gracefully.
+    if docker ps -q -f "name=^${CONTAINER}$" | grep -q .; then
+      sleep 6
+      docker stop -t 30 "$CONTAINER" > /dev/null 2>&1 || true
+    fi
     docker rm -f "$CONTAINER" > /dev/null 2>&1 || true
     mkdir -p "$CHAIN/state"
     docker run -d --name "$CONTAINER" \
