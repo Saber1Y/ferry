@@ -1,17 +1,53 @@
-import { useEffect, useState } from "react";
-import { errorMessage, getStatus, type Status } from "./api";
+import { useCallback, useEffect, useState } from "react";
+import { errorMessage, getStatus, onSession, type Status } from "./api";
+import Crossing from "./Crossing";
 import Home from "./Home";
+import Plan from "./Plan";
 import Restore from "./Restore";
+
+type View = "main" | "plan";
 
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [view, setView] = useState<View>("main");
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     getStatus()
       .then(setStatus)
       .catch((e) => setLoadError(errorMessage(e)));
   }, []);
+
+  useEffect(() => {
+    refresh();
+    // The scheduler announces every session; refetch so progress stays live.
+    const unlisten = onSession(refresh);
+    return () => {
+      unlisten.then((stop) => stop());
+    };
+  }, [refresh]);
+
+  const migrating = !!status?.progress?.active || !!status?.scheduler.followUp;
+
+  let page: React.ReactNode = <p className="muted">Opening FERRY…</p>;
+  if (status && !status.hasWallet) {
+    page = <Restore defaultBirthday={status.defaultBirthday} onRestored={setStatus} />;
+  } else if (status && view === "plan") {
+    page = (
+      <Plan
+        followUp={status.scheduler.followUp}
+        onCancel={() => setView("main")}
+        onCommitted={(s) => {
+          setStatus(s);
+          setView("main");
+        }}
+      />
+    );
+  } else if (status && migrating && status.progress) {
+    page = <Crossing status={status} onStatus={setStatus} onFollowUp={() => setView("plan")} />;
+  } else if (status) {
+    page = <Home status={status} onStatus={setStatus} onPlan={() => setView("plan")} />;
+  }
 
   return (
     <div className="shell">
@@ -51,9 +87,7 @@ export default function App() {
             FERRY could not start: {loadError}
           </div>
         )}
-        {!status && !loadError && <p className="muted">Opening FERRY…</p>}
-        {status && !status.hasWallet && <Restore onRestored={setStatus} />}
-        {status && status.hasWallet && <Home status={status} onStatus={setStatus} />}
+        {!loadError && page}
       </main>
     </div>
   );

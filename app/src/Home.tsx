@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { errorMessage, syncWallet, type Status } from "./api";
+import { errorMessage, sentence, syncWallet, type Status } from "./api";
 import { DUST_ZATOSHIS, blockHeight, zec, zecText } from "./format";
 
 function Amount({ zatoshis, tone }: { zatoshis: number; tone: "orchard" | "ironwood" }) {
@@ -16,9 +16,11 @@ function Amount({ zatoshis, tone }: { zatoshis: number; tone: "orchard" | "ironw
 export default function Home({
   status,
   onStatus,
+  onPlan,
 }: {
   status: Status;
   onStatus: (s: Status) => void;
+  onPlan: () => void;
 }) {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export default function Home({
     try {
       onStatus(await syncWallet());
     } catch (e) {
-      setError(errorMessage(e));
+      setError(sentence(errorMessage(e)));
     } finally {
       setSyncing(false);
     }
@@ -91,12 +93,11 @@ export default function Home({
       </div>
 
       {toMove && (
-        <div className="next">
-          <p className="next-label">Next</p>
-          <p>
-            Planning the crossing (pieces, schedule, fees) is the next part of FERRY being built.
-            It is not in this build yet.
-          </p>
+        <div className="actions">
+          <button className="button button-primary" onClick={onPlan}>
+            Plan the crossing
+          </button>
+          <span className="hint">You review every piece before anything is signed.</span>
         </div>
       )}
 

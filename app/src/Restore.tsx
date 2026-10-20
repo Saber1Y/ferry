@@ -1,11 +1,17 @@
 import { useState, type FormEvent } from "react";
-import { errorMessage, restoreWallet, type Status } from "./api";
+import { errorMessage, restoreWallet, sentence, type Status } from "./api";
 
 const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
 
-export default function Restore({ onRestored }: { onRestored: (s: Status) => void }) {
+export default function Restore({
+  defaultBirthday,
+  onRestored,
+}: {
+  defaultBirthday: number;
+  onRestored: (s: Status) => void;
+}) {
   const [phrase, setPhrase] = useState("");
-  const [birthday, setBirthday] = useState("1");
+  const [birthday, setBirthday] = useState(String(defaultBirthday));
   const [understood, setUnderstood] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +19,7 @@ export default function Restore({ onRestored }: { onRestored: (s: Status) => voi
   const words = phrase.trim() ? phrase.trim().split(/\s+/).length : 0;
   const wordsOk = VALID_WORD_COUNTS.includes(words);
   const birthdayNum = Number(birthday);
-  const birthdayOk = Number.isInteger(birthdayNum) && birthdayNum >= 1;
+  const birthdayOk = Number.isInteger(birthdayNum) && birthdayNum >= defaultBirthday;
   const canSubmit = wordsOk && birthdayOk && understood && !busy;
 
   async function submit(e: FormEvent) {
@@ -27,10 +33,8 @@ export default function Restore({ onRestored }: { onRestored: (s: Status) => voi
     try {
       onRestored(await restoreWallet(secret, birthdayNum));
     } catch (err) {
-      const message = errorMessage(err);
       setError(
-        `${message.charAt(0).toUpperCase()}${message.slice(1)}. ` +
-          "For safety your phrase was cleared, so please type it again.",
+        `${sentence(errorMessage(err))}. For safety your phrase was cleared, so please type it again.`,
       );
       setBusy(false);
     }
