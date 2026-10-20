@@ -26,3 +26,6 @@ regtest/chain/
 .DS_Store
 .idea/
 .vscode/
+
+# Third-party tools built locally (zcash-devtool, lightwalletd)
+.deps/
