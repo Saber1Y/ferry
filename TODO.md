@@ -23,7 +23,7 @@ Legend: `[x]` done and verified, `[ ]` to do, **KILL** = decision point.
 - [x] `regtest/chain.sh`: start / stop / mine / rpc / reset
 - [x] `zebrad` 7.0.0-rc.0 (arm64) running in Docker
 - [x] `lightwalletd` v0.5.5 built with Go, two instances (A = sync :9067, B = broadcast :9077)
-- [x] Ada's wallet created (zcash-devtool). The "naive" user wallet is still to do (needed for the observer demo)
+- [x] Ada and Bob (naive) wallets, built by `regtest/setup-demo.sh`; Bob's one-shot migration recorded in run 2
 
 ## Oct 21: prove one crossing on a real node (**KILL**, passed Oct 20)
 
@@ -35,9 +35,12 @@ Legend: `[x]` done and verified, `[ ]` to do, **KILL** = decision point.
 - [x] Node accepted both crossings (mined at 745): orchard out 500.00015 / 200.00015, ironwood in 500 / 200
 - [x] **KILL criterion passed on Oct 20.** Evidence: `evidence/regtest-run-1/`
 
-## Found in regtest run 1 (fix in FERRY)
+## Found in regtest runs 1 and 2 (fix in FERRY)
 
-- [ ] Scheduler must not broadcast two due crossings together (seen at 744 in run 1 and again at 2164 in the follow-up run)
+- [x] `chain.sh` lost freshly mined blocks on zebrad restart; now waits for the block backup
+- [ ] Seed mode must ask for the wallet birthday carefully (funds below the birthday are never scanned, so they would silently not migrate)
+
+- [x] Scheduler: one action per session, at most one broadcast, random delay between crossings. Run 2: 13 crossings in 13 different blocks (`evidence/regtest-run-2/`)
 - [x] 49.99 REG left in Orchard: the engine defers pieces when fees do not fit; fixed with automatic follow-up runs (final: 749.98 Ironwood, 0.00925 Orchard)
 - [ ] Driver: stop when the migration completes (done in `drive.sh`)
 
