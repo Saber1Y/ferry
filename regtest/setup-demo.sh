@@ -14,7 +14,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=heights.env
 source "$HERE/heights.env"
-DT="${DEVTOOL:-$HERE/../.deps/zcash-devtool/target/release/zcash-devtool}"
+DT="${DEVTOOL:-$HERE/../.deps/bin/zcash-devtool}"
 CHAIN="$HERE/chain"
 WALLETS="$CHAIN/wallets"
 SYNC_SERVER=127.0.0.1:9067

@@ -20,7 +20,7 @@
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DT="${DEVTOOL:-$HERE/../.deps/zcash-devtool/target/release/zcash-devtool}"
+DT="${DEVTOOL:-$HERE/../.deps/bin/zcash-devtool}"
 W="${1:?usage: drive.sh <wallet_dir> [max_height] [blocks_per_step]}"
 MAX_HEIGHT="${2:-1000}"
 STEP="${3:-5}"
