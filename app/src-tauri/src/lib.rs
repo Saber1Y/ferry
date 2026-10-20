@@ -1,12 +1,15 @@
 //! FERRY's desktop shell. Everything that touches keys, the chain or the schedule lives in
-//! `ferry-core`; this file only exposes it to the window as Tauri commands.
+//! `ferry-core`; this file exposes it to the window as Tauri commands and runs the scheduler in
+//! the background while a migration is in progress.
 
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
-use ferry_core::{Balances, FerryNetwork, Server, Wallet};
+use ferry_core::{Balances, FerryNetwork, PlanPreview, Progress, Server, SessionOutcome, Wallet};
 use secrecy::SecretString;
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
 /// Settings the app runs with. The hackathon build targets the local regtest chain from
@@ -18,12 +21,28 @@ struct Config {
     sync_server: Server,
     broadcast_server: Server,
     wallet_dir: PathBuf,
+    /// How often the scheduler runs a session. A session does nothing visible unless a block
+    /// arrived or something became due, so this only bounds how late FERRY notices.
+    session_interval: Duration,
+}
+
+/// What the scheduler last did, for the progress screen.
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SchedulerState {
+    running: bool,
+    /// The last session's outcome.
+    last: Option<SessionOutcome>,
+    last_error: Option<String>,
+    /// Set when a run finished and a follow-up run needs the user's signature.
+    follow_up: Option<PlanPreview>,
 }
 
 struct AppState {
     config: Config,
-    /// Serialises wallet operations: one sync, restore or migration step at a time.
+    /// Serialises wallet operations: one sync, restore, commit or session at a time.
     busy: Mutex<()>,
+    scheduler: Mutex<SchedulerState>,
 }
 
 #[derive(Serialize)]
@@ -32,30 +51,45 @@ struct Status {
     network: &'static str,
     sync_server: String,
     broadcast_server: String,
+    default_birthday: u32,
     has_wallet: bool,
     balances: Option<Balances>,
+    progress: Option<Progress>,
+    scheduler: SchedulerState,
 }
 
 /// Errors cross into the window as plain messages.
 type CmdResult<T> = Result<T, String>;
 
-fn status_of(config: &Config) -> CmdResult<Status> {
-    let (has_wallet, balances) = match Wallet::open(&config.wallet_dir, config.network) {
-        Ok(wallet) => (true, wallet.balances().map_err(|e| e.to_string())?),
-        Err(_) => (false, None),
+async fn status_of(state: &AppState) -> CmdResult<Status> {
+    let config = &state.config;
+    let (has_wallet, balances, progress) = match Wallet::open(&config.wallet_dir, config.network) {
+        Ok(wallet) => (
+            true,
+            wallet.balances().map_err(|e| e.to_string())?,
+            wallet.migration_progress().map_err(|e| e.to_string())?,
+        ),
+        Err(_) => (false, None, None),
     };
     Ok(Status {
         network: config.network_name,
         sync_server: config.sync_server.to_string(),
         broadcast_server: config.broadcast_server.to_string(),
+        default_birthday: config.network.lowest_birthday(),
         has_wallet,
         balances,
+        progress,
+        scheduler: state.scheduler.lock().await.clone(),
     })
 }
 
+fn open_wallet(config: &Config) -> CmdResult<Wallet> {
+    Wallet::open(&config.wallet_dir, config.network).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
-async fn get_status(state: tauri::State<'_, AppState>) -> CmdResult<Status> {
-    status_of(&state.config)
+async fn get_status(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Status> {
+    status_of(&state).await
 }
 
 /// Restores the wallet from a recovery phrase, then syncs it.
@@ -64,39 +98,129 @@ async fn get_status(state: tauri::State<'_, AppState>) -> CmdResult<Status> {
 /// exists. FERRY keeps only what it needs to watch and prove: nothing that can spend is stored.
 #[tauri::command]
 async fn restore_wallet(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, Arc<AppState>>,
     phrase: String,
     birthday: u32,
 ) -> CmdResult<Status> {
     let phrase = SecretString::new(phrase);
-    let _guard = state.busy.lock().await;
-    let config = &state.config;
-    let wallet = Wallet::restore(
-        &config.wallet_dir,
-        config.network,
-        phrase,
-        birthday,
-        &config.sync_server,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-    wallet
-        .sync(&config.sync_server)
+    {
+        let _guard = state.busy.lock().await;
+        let config = &state.config;
+        let wallet = Wallet::restore(
+            &config.wallet_dir,
+            config.network,
+            phrase,
+            birthday,
+            &config.sync_server,
+        )
         .await
         .map_err(|e| e.to_string())?;
-    status_of(config)
+        wallet
+            .sync(&config.sync_server)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    status_of(&state).await
 }
 
 #[tauri::command]
-async fn sync_wallet(state: tauri::State<'_, AppState>) -> CmdResult<Status> {
+async fn sync_wallet(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Status> {
+    {
+        let _guard = state.busy.lock().await;
+        let config = &state.config;
+        open_wallet(config)?
+            .sync(&config.sync_server)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    status_of(&state).await
+}
+
+/// Previews the next migration run for the consent screen. Nothing is changed.
+#[tauri::command]
+async fn plan_migration(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Option<PlanPreview>> {
     let _guard = state.busy.lock().await;
-    let config = &state.config;
-    let wallet = Wallet::open(&config.wallet_dir, config.network).map_err(|e| e.to_string())?;
-    wallet
-        .sync(&config.sync_server)
-        .await
-        .map_err(|e| e.to_string())?;
-    status_of(config)
+    open_wallet(&state.config)?
+        .plan_migration()
+        .map_err(|e| e.to_string())
+}
+
+/// Signs a whole migration run with the phrase (wiped when the call returns) and starts the
+/// scheduler. Calling it is the user's consent to the plan they were shown (ZIP 318).
+#[tauri::command]
+async fn commit_migration(
+    app: AppHandle,
+    state: tauri::State<'_, Arc<AppState>>,
+    phrase: String,
+) -> CmdResult<Status> {
+    let phrase = SecretString::new(phrase);
+    {
+        let _guard = state.busy.lock().await;
+        open_wallet(&state.config)?
+            .commit_migration(phrase)
+            .map_err(|e| e.to_string())?;
+        state.scheduler.lock().await.follow_up = None;
+    }
+    start_scheduler(app, state.inner().clone()).await;
+    status_of(&state).await
+}
+
+/// Starts the background scheduler if it is not already running.
+async fn start_scheduler(app: AppHandle, state: Arc<AppState>) {
+    {
+        let mut scheduler = state.scheduler.lock().await;
+        if scheduler.running {
+            return;
+        }
+        scheduler.running = true;
+        scheduler.last_error = None;
+    }
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let result = {
+                let _guard = state.busy.lock().await;
+                match open_wallet(&state.config) {
+                    Ok(wallet) => wallet
+                        .run_session(&state.config.sync_server, &state.config.broadcast_server)
+                        .await
+                        .map_err(|e| e.to_string()),
+                    Err(e) => Err(e),
+                }
+            };
+
+            let stop = {
+                let mut scheduler = state.scheduler.lock().await;
+                match result {
+                    Ok(outcome) => {
+                        scheduler.last_error = None;
+                        let stop = match &outcome {
+                            SessionOutcome::Complete => true,
+                            SessionOutcome::FollowUpNeeded { preview } => {
+                                scheduler.follow_up = Some(preview.clone());
+                                true
+                            }
+                            _ => false,
+                        };
+                        scheduler.last = Some(outcome);
+                        stop
+                    }
+                    // A failed session (server unreachable, a rejected broadcast) is reported and
+                    // retried on the next tick: nothing is lost, the transactions stay signed.
+                    Err(e) => {
+                        scheduler.last_error = Some(e);
+                        false
+                    }
+                }
+            };
+            let _ = app.emit("ferry://session", ());
+            if stop {
+                state.scheduler.lock().await.running = false;
+                let _ = app.emit("ferry://session", ());
+                break;
+            }
+            tokio::time::sleep(state.config.session_interval).await;
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -122,14 +246,36 @@ pub fn run() {
                 sync_server: Server::new("127.0.0.1", 9067),
                 broadcast_server: Server::new("127.0.0.1", 9077),
                 wallet_dir,
+                session_interval: Duration::from_secs(3),
             };
-            app.manage(AppState {
+            let state = Arc::new(AppState {
                 config,
                 busy: Mutex::new(()),
+                scheduler: Mutex::new(SchedulerState::default()),
+            });
+            app.manage(state.clone());
+
+            // Resume a migration that was in progress when the app last closed (ZIP 318:
+            // reconcile on launch). The scheduler spaces overdue crossings out; it never bursts.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let in_progress = Wallet::open(&state.config.wallet_dir, state.config.network)
+                    .and_then(|w| w.migration_progress())
+                    .map(|p| p.is_some_and(|p| p.active))
+                    .unwrap_or(false);
+                if in_progress {
+                    start_scheduler(handle, state).await;
+                }
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_status, restore_wallet, sync_wallet])
+        .invoke_handler(tauri::generate_handler![
+            get_status,
+            restore_wallet,
+            sync_wallet,
+            plan_migration,
+            commit_migration
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
