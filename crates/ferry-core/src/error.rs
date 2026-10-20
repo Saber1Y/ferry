@@ -24,6 +24,15 @@ pub enum Error {
     #[error("the wallet database failed: {0}")]
     Wallet(String),
 
+    #[error("this recovery phrase does not belong to this wallet")]
+    WrongPhrase,
+
+    #[error("a migration is already in progress")]
+    MigrationInProgress,
+
+    #[error("the server rejected the transaction ({0})")]
+    Rejected(String),
+
     #[error("syncing failed: {0}")]
     Sync(String),
 

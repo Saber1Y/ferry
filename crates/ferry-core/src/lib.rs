@@ -8,10 +8,12 @@
 pub mod cache;
 pub mod error;
 pub mod lightwalletd;
+pub mod migration;
 pub mod network;
 pub mod wallet;
 
 pub use error::Error;
 pub use lightwalletd::Server;
+pub use migration::{PlanPreview, Progress, SessionOutcome};
 pub use network::FerryNetwork;
 pub use wallet::{Balances, Wallet};

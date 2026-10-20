@@ -1269,6 +1269,8 @@ dependencies = [
  "rusqlite",
  "secrecy",
  "serde",
+ "serde_json",
+ "shardtree",
  "thiserror 2.0.21",
  "tokio",
  "tonic",
@@ -1281,6 +1283,7 @@ dependencies = [
  "zcash_primitives",
  "zcash_protocol",
  "zeroize",
+ "zip32",
 ]
 
 [[package]]
