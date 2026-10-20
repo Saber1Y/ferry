@@ -80,6 +80,8 @@ impl Wallet {
             secret
         };
 
+        let birthday = birthday.max(network.lowest_birthday());
+
         let mut client = server.connect().await?;
         let tip = client
             .get_latest_block(service::ChainSpec::default())
