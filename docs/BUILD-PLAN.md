@@ -117,6 +117,9 @@ She has not migrated because Zodl wants her to keep opening the app for weeks, a
 FERRY asks the engine for a plan and shows:
 
 - **Pieces:** 40.37 ZEC becomes standard amounts (for example 20 + 10 + 10 + 0.2 + 0.1 + 0.05 + 0.02), plus dust under 0.01 that stays in Orchard.
+- **Runs:** the engine plans one run at a time and drops the smallest pieces when the fees do not fit the balance (it never swaps in smaller pieces, so the amounts stay a function of the balance alone).
+  When that happens, FERRY says so up front: "Most of your balance moves in this run. About X ZEC is left for a short second run, which you will sign once more when this one finishes."
+  Seen in regtest run 1: a round 750 left no fee slack, so run 1 crossed 500 + 200 and run 2 covers the remaining 49.99.
 - **Timeline:** preparation (a few hours), then one crossing every few days on average, finishing in about N weeks if the laptop is on most days.
 - **Fees:** total network fees.
 - **What a stranger can see:** a few standard-size crossings at random times, the same shape as everyone else's.
@@ -153,6 +156,12 @@ FERRY picks up where it left off without bursting.
 - **Menu-bar icon:** "4 of 7 moved".
 - **Window:** progress, the next crossing window (approximate on purpose), and her own transaction list.
 - **Notifications:** only "done" and "needs you".
+
+### 7b. Follow-up run (only when the engine deferred some pieces)
+
+1. When the run finishes, FERRY plans the remaining balance and shows it, for example "49.98 ZEC in 11 pieces".
+2. In seed mode Ada enters her phrase once more; FERRY signs the follow-up run and wipes it again.
+3. The follow-up run then proceeds like steps 5 to 7.
 
 ### 8. Done
 
