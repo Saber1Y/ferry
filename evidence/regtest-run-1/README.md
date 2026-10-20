@@ -37,8 +37,22 @@
 1. **Both crossings were broadcast in the same block (744) and mined together (745).**
    The driver sends everything that is due in one pass, which links them by timing.
    FERRY's scheduler must spread due crossings over separate random delays.
-2. **49.99 REG was left in Orchard.**
-   The plan only contained 500 + 200 crossings, so about 50 REG was never scheduled to cross.
-   ZIP 318 leaves only dust below 0.01 behind.
-   Cause not yet investigated (denomination strategy or fee reconciliation).
+2. **49.99 REG was left in Orchard after the first run. Fixed (see "Follow-up run" below).**
+   Cause: the engine plans one run at a time. It splits the whole balance canonically (750 -> 500 + 200 + 50) and, when the fees do not fit, drops the smallest pieces rather than substituting smaller ones, so the published amounts stay a function of the balance alone.
+   A round 750 left no slack for fees, so the 50 was deferred.
+   Fix: `regtest/drive.sh` (and FERRY) plans and commits a follow-up run for the deferred balance when a run completes.
 3. **devtool needed two changes** (see `harness/README.md`): a broadcast step, and a preparation anchor that the wallet actually holds a checkpoint for.
+
+## Follow-up run (same wallet, same day)
+
+| Step | Height | Result |
+|---|---|---|
+| Follow-up plan over 49.9917 REG | 1104 | 11 crossings: 20, 20, 5, 2, 2, 0.5, 0.2, 0.2, 0.05, 0.02, 0.01 (49.98), 1 preparation |
+| Committed automatically by `drive.sh` (`IDENTITY` set) | 1104 | 12 transactions signed |
+| Last crossing (0.01) broadcast via B | 2574 | `89706407100ac8a081c8ef4b40f658012373d52d40fe27fda75eddfcbaf7be4d` |
+| Migration complete | 2584 | |
+| Chain pools after | 2584 | orchard 0.00925, ironwood 749.98 |
+| Ada's wallet after | 2584 | Ironwood 749.98 REG, Orchard 0.00925 REG |
+
+Final result: 749.98 of 750 REG moved to Ironwood over two runs, 0.00925 REG of dust left in Orchard (under ZIP 318's 0.01 limit), about 0.0108 REG paid in fees.
+The same-block issue recurred once in this run: two crossings were broadcast at height 2164.

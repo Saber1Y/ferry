@@ -1,0 +1,27 @@
+[h=1104] run complete, follow-up run for the deferred balance:   Crossing values: [Zatoshis(2000000000), Zatoshis(2000000000), Zatoshis(500000000), Zatoshis(200000000), Zatoshis(200000000), Zatoshis(50000000), Zatoshis(20000000), Zatoshis(20000000), Zatoshis(5000000), Zatoshis(2000000), Zatoshis(1000000)]
+[h=1104] Migration committed: status=committed, 12 transaction(s) recorded
+[h=1134] advance: Proved transaction 0.
+[h=1134] Broadcast migration transaction 0 as 6633d77c8aaef9d96fd9a4adaba62584438df4660e6ad553c4a94ac474c9b47f
+[h=1164] advance: Proved transaction 5.
+[h=1314] advance: Proved transaction 2.
+[h=1314] advance: Proved transaction 9.
+[h=1314] advance: Proved transaction 10.
+[h=1414] Broadcast migration transaction 5 as 5cbf3b4b09f99e937cc06ebdbc59f89daca0aa5dae13ebb646f7f37c3ac1f34f
+[h=1534] Broadcast migration transaction 10 as 31a54ba702a345c0160973fcb339245e2314c3d9f5100665ccbc784e5d0bbd20
+[h=1554] Broadcast migration transaction 9 as 2da995ab0f7e650d14061ed4c0aae6946c1d1b1afc36aaa671b89d2a25677d15
+[h=1644] Broadcast migration transaction 2 as aa86a41632a348efb7a35928abc165111f919000465c6e17641d8c0ffd06f5f8
+[h=1744] advance: Proved transaction 3.
+[h=1744] advance: Proved transaction 4.
+[h=1884] advance: Proved transaction 6.
+[h=1884] advance: Proved transaction 7.
+[h=1894] Broadcast migration transaction 4 as 046b5c5c6e22b817a8328b1c09729e2ec194732a9f7143496a2a19e9eab273f7
+[h=1994] Broadcast migration transaction 3 as 7c5221e17da46ea883f1de1e81c8dfac8b42a48a678b98e71276966cc2d7fa44
+[h=2034] advance: Proved transaction 8.
+[h=2164] Broadcast migration transaction 6 as 3374b3bea6957e30a2e057768e631dad3914735582c0084c186bb97cae868d6b
+[h=2164] Broadcast migration transaction 7 as 81bda9a1df16953bf97c6031cb9aa991f5d2c8bf8b219d976cdc564ae3138931
+[h=2174] advance: Proved transaction 1.
+[h=2174] advance: Proved transaction 11.
+[h=2314] Broadcast migration transaction 8 as e420ed6a63c4ff8b8c4d7b8fbadae9808eaacbd9a1274fb0b3b17a10bb0b907c
+[h=2384] Broadcast migration transaction 1 as 5b78bd09b9e1e3385a7db2cc7631638f8032232760e2c698497e084bec2bd5b5
+[h=2574] Broadcast migration transaction 11 as 89706407100ac8a081c8ef4b40f658012373d52d40fe27fda75eddfcbaf7be4d
+[h=2584] migration complete
