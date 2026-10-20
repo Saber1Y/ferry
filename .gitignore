@@ -1,0 +1,28 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node / UI
+node_modules/
+dist/
+.vite/
+
+# Tauri build output
+src-tauri/target/
+src-tauri/gen/
+
+# Local regtest chain data (never commit chain state or wallets)
+regtest/chain/
+*.sqlite
+*.sqlite-journal
+*.db
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
