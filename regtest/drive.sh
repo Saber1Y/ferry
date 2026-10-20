@@ -32,6 +32,9 @@ while :; do
       echo "[h=$h] $b"
     elif echo "$b" | grep -q 'Nothing is due'; then
       break
+    elif echo "$b" | grep -q 'No migration in progress'; then
+      echo "[h=$h] migration complete"
+      exit 0
     else
       echo "[h=$h] broadcast: $b"
       break
