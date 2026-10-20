@@ -17,23 +17,29 @@ Legend: `[x]` done and verified, `[ ]` to do, **KILL** = decision point.
 - [x] Docker Desktop running (29.5.3, arm64)
 - [x] Create private repo `Saber1Y/ferry`
 
-## Oct 20: local chain
+## Oct 20: local chain (done)
 
-- [ ] `regtest/zebrad.toml`: Regtest, NU5 to NU6.2 at height 1, NU6.3 at a set height (e.g. 200), RPC on localhost
-- [ ] `regtest/chain.sh`: start / stop / mine N / rpc, our own script (Logos's has no licence, do not copy)
-- [ ] Run `zebrad` 7.0.0-rc.0 (arm64 Linux build) in Docker, confirm `getblockcount` answers
-- [ ] Build `lightwalletd` with Go, run two instances (A = sync, B = broadcast)
-- [ ] Generate two demo wallets (Ada + a "naive" user) and their unified addresses
+- [x] Zebra regtest config: upgrades through NU6.2 at height 1, NU6.3 at 300 (rendered by `chain.sh` from `heights.env`)
+- [x] `regtest/chain.sh`: start / stop / mine / rpc / reset
+- [x] `zebrad` 7.0.0-rc.0 (arm64) running in Docker
+- [x] `lightwalletd` v0.5.5 built with Go, two instances (A = sync :9067, B = broadcast :9077)
+- [x] Ada's wallet created (zcash-devtool). The "naive" user wallet is still to do (needed for the observer demo)
 
-## Oct 21: prove one crossing on a real node (**KILL**)
+## Oct 21: prove one crossing on a real node (**KILL**, passed Oct 20)
 
-- [ ] Mine Orchard coinbase to both demo wallets before the NU6.3 height, then mine past it
-- [ ] `harness/`: a small Rust binary on `zcash_client_sqlite` + `zcash_pool_migration`, pinned to the tested librustzcash revision
-- [ ] Harness: sync Ada from server A, see her Orchard balance
-- [ ] Harness: plan, consent (flag), sign all with the seed, persist
-- [ ] Harness: mine to the scheduled height, prove one crossing, broadcast through server B
-- [ ] Confirm the node accepts it and the explorer view shows a standard denomination
-- [ ] **KILL:** if no crossing is accepted by end of Oct 21, switch to the fallback CLI (see BUILD-PLAN.md)
+- [x] 750 REG of Orchard coinbase mined to Ada before NU6.3, then mined past it
+- [x] `harness/`: zcash-devtool patch (broadcast command + checkpoint-safe preparation anchor) instead of a new binary
+- [x] Sync Ada from server A: Orchard 750 REG
+- [x] Plan (500 + 200), commit, 12 transactions signed in one pass
+- [x] All 10 preparations and both crossings proved and broadcast through server B
+- [x] Node accepted both crossings (mined at 745): orchard out 500.00015 / 200.00015, ironwood in 500 / 200
+- [x] **KILL criterion passed on Oct 20.** Evidence: `evidence/regtest-run-1/`
+
+## Found in regtest run 1 (fix in FERRY)
+
+- [ ] Scheduler must not broadcast two due crossings together (both went out at 744 and mined at 745)
+- [ ] Investigate the 49.99 REG left in Orchard (plan only crossed 500 + 200)
+- [ ] Driver: stop when the migration completes (done in `drive.sh`)
 
 ## Oct 22: Tauri app shell
 
