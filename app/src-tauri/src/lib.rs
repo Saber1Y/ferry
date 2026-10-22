@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ferry_core::{Balances, FerryNetwork, PlanPreview, Progress, Server, SessionOutcome, Wallet};
+use ferry_core::{
+    Balances, FerryNetwork, HistoryEntry, PlanPreview, Progress, Server, SessionOutcome, Wallet,
+};
 use secrecy::SecretString;
 use serde::Serialize;
 #[cfg(target_os = "macos")]
@@ -140,6 +142,14 @@ async fn sync_wallet(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Status
     status_of(&state).await
 }
 
+/// Every transaction FERRY has sent for this wallet, newest first.
+#[tauri::command]
+async fn get_history(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Vec<HistoryEntry>> {
+    open_wallet(&state.config)?
+        .history()
+        .map_err(|e| e.to_string())
+}
+
 /// Previews the next migration run for the consent screen. Nothing is changed.
 #[tauri::command]
 async fn plan_migration(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Option<PlanPreview>> {
@@ -179,6 +189,16 @@ async fn refresh_tray(app: &AppHandle, state: &AppState) {
         .flatten();
     let follow_up = state.scheduler.lock().await.follow_up.is_some();
     desktop::set_tray_status(app, &desktop::status_line(progress.as_ref(), follow_up));
+}
+
+/// A follow-up run is pending when this wallet has migrated before (FERRY has sent for it) and
+/// balance above dust is still in Orchard.
+fn pending_follow_up(config: &Config) -> Option<PlanPreview> {
+    let wallet = open_wallet(config).ok()?;
+    if wallet.history().ok()?.is_empty() {
+        return None;
+    }
+    wallet.plan_migration().ok().flatten()
 }
 
 /// ZIP 318 catch-up: if crossings became overdue while FERRY was closed or the computer slept,
@@ -329,6 +349,10 @@ pub fn run() {
                     .unwrap_or(false);
                 if in_progress {
                     start_scheduler(handle.clone(), state.clone()).await;
+                } else if let Some(preview) = pending_follow_up(&state.config) {
+                    // A run finished earlier and left balance for a follow-up run the user has
+                    // not signed yet: come back up in that state rather than forgetting it.
+                    state.scheduler.lock().await.follow_up = Some(preview);
                 }
                 refresh_tray(&handle, &state).await;
             });
@@ -339,7 +363,8 @@ pub fn run() {
             restore_wallet,
             sync_wallet,
             plan_migration,
-            commit_migration
+            commit_migration,
+            get_history
         ])
         // Closing the window keeps FERRY in the tray, so a migration keeps running; quitting is
         // done from the tray menu.
