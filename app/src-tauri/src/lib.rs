@@ -2,14 +2,18 @@
 //! `ferry-core`; this file exposes it to the window as Tauri commands and runs the scheduler in
 //! the background while a migration is in progress.
 
+mod desktop;
+
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ferry_core::{Balances, FerryNetwork, PlanPreview, Progress, Server, SessionOutcome, Wallet};
 use secrecy::SecretString;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+#[cfg(target_os = "macos")]
+use tauri::RunEvent;
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tokio::sync::Mutex;
 
 /// Settings the app runs with. The hackathon build targets the local regtest chain from
@@ -161,8 +165,33 @@ async fn commit_migration(
             .map_err(|e| e.to_string())?;
         state.scheduler.lock().await.follow_up = None;
     }
-    start_scheduler(app, state.inner().clone()).await;
+    desktop::set_start_at_login(&app, true);
+    start_scheduler(app.clone(), state.inner().clone()).await;
+    refresh_tray(&app, &state).await;
     status_of(&state).await
+}
+
+/// Updates the tray's status line from the wallet's migration progress.
+async fn refresh_tray(app: &AppHandle, state: &AppState) {
+    let progress = open_wallet(&state.config)
+        .and_then(|w| w.migration_progress().map_err(|e| e.to_string()))
+        .ok()
+        .flatten();
+    let follow_up = state.scheduler.lock().await.follow_up.is_some();
+    desktop::set_tray_status(app, &desktop::status_line(progress.as_ref(), follow_up));
+}
+
+/// ZIP 318 catch-up: if crossings became overdue while FERRY was closed or the computer slept,
+/// hold the next one back by a fresh random delay instead of sending it right away.
+async fn defer_overdue(state: &AppState) {
+    let _guard = state.busy.lock().await;
+    if let Ok(wallet) = open_wallet(&state.config) {
+        match wallet.defer_overdue_crossings(&state.config.sync_server).await {
+            Ok(Some(height)) => log::info!("overdue crossings: next one not before block {height}"),
+            Ok(None) => {}
+            Err(e) => log::warn!("could not check for overdue crossings: {e}"),
+        }
+    }
 }
 
 /// Starts the background scheduler if it is not already running.
@@ -176,7 +205,16 @@ async fn start_scheduler(app: AppHandle, state: Arc<AppState>) {
         scheduler.last_error = None;
     }
     tauri::async_runtime::spawn(async move {
+        defer_overdue(&state).await;
+        let mut last_tick = Instant::now();
         loop {
+            // A tick far later than scheduled means the computer slept (or the process was
+            // suspended): treat it like a relaunch and space out whatever became overdue.
+            if last_tick.elapsed() > state.config.session_interval + Duration::from_secs(300) {
+                defer_overdue(&state).await;
+            }
+            last_tick = Instant::now();
+
             let result = {
                 let _guard = state.busy.lock().await;
                 match open_wallet(&state.config) {
@@ -213,9 +251,25 @@ async fn start_scheduler(app: AppHandle, state: Arc<AppState>) {
                 }
             };
             let _ = app.emit("ferry://session", ());
+            refresh_tray(&app, &state).await;
             if stop {
-                state.scheduler.lock().await.running = false;
+                let follow_up = {
+                    let mut scheduler = state.scheduler.lock().await;
+                    scheduler.running = false;
+                    scheduler.follow_up.is_some()
+                };
+                if follow_up {
+                    desktop::notify(
+                        &app,
+                        "FERRY needs you",
+                        "This run has finished. Sign a short follow-up run to move what is left.",
+                    );
+                } else {
+                    desktop::notify(&app, "Everything has crossed", "Your ZEC is in Ironwood.");
+                    desktop::set_start_at_login(&app, false);
+                }
                 let _ = app.emit("ferry://session", ());
+                refresh_tray(&app, &state).await;
                 break;
             }
             tokio::time::sleep(state.config.session_interval).await;
@@ -226,7 +280,17 @@ async fn start_scheduler(app: AppHandle, state: Arc<AppState>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Must be registered first: a second launch just shows the running FERRY.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            desktop::show_window(app)
+        }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            desktop::build_tray(app.handle())?;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -264,8 +328,9 @@ pub fn run() {
                     .map(|p| p.is_some_and(|p| p.active))
                     .unwrap_or(false);
                 if in_progress {
-                    start_scheduler(handle, state).await;
+                    start_scheduler(handle.clone(), state.clone()).await;
                 }
+                refresh_tray(&handle, &state).await;
             });
             Ok(())
         })
@@ -276,6 +341,22 @@ pub fn run() {
             plan_migration,
             commit_migration
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // Closing the window keeps FERRY in the tray, so a migration keeps running; quitting is
+        // done from the tray menu.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // macOS: clicking the Dock icon brings the hidden window back. (Elsewhere the tray
+            // menu's "Show FERRY" does.)
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Reopen { .. } = _event {
+                desktop::show_window(_app);
+            }
+        });
 }
