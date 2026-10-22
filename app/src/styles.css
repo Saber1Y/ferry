@@ -682,3 +682,21 @@ body {
     transition: none;
   }
 }
+
+.next-up {
+  margin: -8px 0 16px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.ledger {
+  counter-reset: none;
+}
+
+.ledger-next {
+  background: linear-gradient(90deg, var(--orchard-wash), transparent 70%);
+}
+
+.ledger-next .ledger-state {
+  color: var(--orchard);
+}

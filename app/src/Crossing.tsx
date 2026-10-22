@@ -42,7 +42,14 @@ export default function Crossing({
   const progress = status.progress!;
   const { scheduler, balances } = status;
 
-  const crossings = progress.pieces.filter((p) => p.kind === "crossing");
+  // In time order, so the next piece to go is at the top of the unsent ones.
+  const crossings = progress.pieces
+    .filter((p) => p.kind === "crossing")
+    .sort((a, b) => a.scheduled_height - b.scheduled_height);
+  const tip = balances?.chain_tip ?? 0;
+  const next = crossings.find((p) => p.state !== "mined" && p.state !== "broadcast");
+  // The scheduler also holds each crossing back until a random gap after the previous one.
+  const nextAt = next ? Math.max(next.scheduled_height, progress.next_crossing_not_before) : null;
   const preparations = progress.pieces.filter((p) => p.kind === "preparation");
   const landed = crossings.filter((p) => p.state === "mined");
   const moved = landed.reduce((sum, p) => sum + (p.amount ?? 0), 0);
@@ -112,9 +119,18 @@ export default function Crossing({
         </div>
       )}
 
+      {nextAt !== null && progress.active && !preparing && (
+        <p className="next-up">
+          Next crossing: <span className="mono">{next && next.amount != null ? `${zecText(next.amount)} ZEC` : ""}</span>
+          {nextAt > tip
+            ? `, not before block ${blockHeight(nextAt)} (${blockHeight(nextAt - tip)} ${nextAt - tip === 1 ? "block" : "blocks"} from now).`
+            : ", due now."}
+        </p>
+      )}
+
       <ol className="ledger" aria-label="Crossings">
         {crossings.map((p) => (
-          <li key={p.id} className={`ledger-row state-${p.state}`}>
+          <li key={p.id} className={`ledger-row state-${p.state}${p === next ? " ledger-next" : ""}`}>
             <span className="mono ledger-amount">{p.amount != null ? `${zecText(p.amount)} ZEC` : "—"}</span>
             <span className="ledger-state">{STATE_LABEL[p.state] ?? p.state}</span>
             <span className="ledger-when mono">not before {blockHeight(p.scheduled_height)}</span>
