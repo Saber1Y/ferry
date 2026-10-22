@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>FERRY · Move your ZEC from Orchard to Ironwood, privately</title>
+    <meta
+      name="description"
+      content="A desktop app that moves your Zcash from the Orchard pool to Ironwood the private way (ZIP 318): standard amounts, signed once, sent one at a time at random intervals."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top-bar">
+      <div class="top">
+      <a class="brand" href="#top" aria-label="FERRY home"><span class="brand-mark" aria-hidden="true"></span>FERRY</a>
+      <nav aria-label="Sections">
+        <a href="#why">Why</a>
+        <a href="#how">How it works</a>
+        <a href="#try">Try it</a>
+        <a href="#evidence">Evidence</a>
+      </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <p class="eyebrow">Zcash · NU6.3 · ZIP 318</p>
+        <h1>Move your ZEC from Orchard to Ironwood without showing anyone your balance.</h1>
+        <p class="lede">
+          Since NU6.3, Orchard funds can only be moved out. Move them in one transaction and the amount
+          is public. FERRY moves them the private way, from your own computer: standard amounts,
+          signed once, sent one at a time at random intervals.
+        </p>
+        <div class="cta">
+          <a class="button button-primary" href="https://github.com/Saber1Y/ferry/releases/latest">Download for macOS</a>
+          <a class="button" href="https://github.com/Saber1Y/ferry/releases/latest">Windows &amp; Linux</a>
+        </div>
+        <p class="fine">
+          Hackathon build for Zecathon 2026. It runs on a demo chain with fake coins; mainnet is not
+          enabled yet. Unsigned installers: macOS asks you to confirm the first launch.
+        </p>
+      </section>
+
+      <section id="why" class="band">
+        <h2>Two wallets, two migrations.</h2>
+        <p class="section-lede">Both ran on the same chain. Here is what anyone reading it could see.</p>
+        <div class="compare">
+          <figure class="case case-exposed">
+            <figcaption>
+              <span class="case-name">Bob moves everything at once</span>
+              <span class="case-tag">exposed</span>
+            </figcaption>
+            <ol class="chain" aria-label="Bob's crossing as the chain shows it">
+              <li><span class="mono">block 331</span><span class="mono amount">249.99 ZEC</span></li>
+            </ol>
+            <p>One transaction, one odd amount: Bob's balance, to within the fee, in plain sight.</p>
+          </figure>
+          <figure class="case case-private">
+            <figcaption>
+              <span class="case-name">Ada moves 750 ZEC with FERRY</span>
+              <span class="case-tag">unlinked</span>
+            </figcaption>
+            <ol class="chain" aria-label="Ada's crossings as the chain shows them">
+              <li><span class="mono">block 847</span><span class="mono amount">500</span></li>
+              <li><span class="mono">block 957</span><span class="mono amount">200</span></li>
+              <li><span class="mono">block 1402</span><span class="mono amount">2</span></li>
+              <li><span class="mono">block 1452</span><span class="mono amount">5</span></li>
+              <li><span class="mono">block 1517</span><span class="mono amount">0.05</span></li>
+              <li class="more">+ 8 more, each in its own block</li>
+            </ol>
+            <p>13 standard amounts that many wallets share, each in its own block, spread over about
+              1,500 blocks. No odd amount, no shared block, nothing that adds up to 750.</p>
+          </figure>
+        </div>
+      </section>
+
+      <section id="how" class="band">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li>
+            <h3>Connect your wallet</h3>
+            <p>Enter the recovery phrase of the wallet holding Orchard funds. FERRY keeps only a
+              view-only copy; the phrase is wiped as soon as the wallet is set up.</p>
+          </li>
+          <li>
+            <h3>Review the plan</h3>
+            <p>Your balance is cut into the standard pieces ZIP 318 defines. You see every piece, the
+              fees and the timeline before anything is signed.</p>
+          </li>
+          <li>
+            <h3>Sign once</h3>
+            <p>Enter the phrase again and FERRY signs every piece in one go, then wipes it. Nothing
+              that can spend is ever written to disk.</p>
+          </li>
+          <li>
+            <h3>Let it cross</h3>
+            <p>FERRY sits in your menu bar and sends one piece at a time, a random while apart,
+              through a different server than the one it syncs from. Leave your computer on.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="band">
+        <h2>What it hides, and what it does not</h2>
+        <dl class="boundary">
+          <div>
+            <dt>Strangers on the chain</dt>
+            <dd>See standard-size crossings at random times, the same shape as every other wallet
+              following ZIP 318. Each crossing's amount is public by design.</dd>
+          </div>
+          <div>
+            <dt>Your computer</dt>
+            <dd>Holds a view-only key and sees your whole wallet history. That is why FERRY runs on
+              your own machine, not on a server.</dd>
+          </div>
+          <div>
+            <dt>The servers</dt>
+            <dd>One sees your syncs, another your broadcasts, never in the same session. The demo
+              build connects without Tor, so they can still see your IP address.</dd>
+          </div>
+          <div>
+            <dt>The crowd</dt>
+            <dd>Standard amounts hide you among the other wallets migrating at the same time. On a
+              demo chain that crowd is small; on mainnet it is every ZIP 318 wallet.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="try" class="band">
+        <h2>Try it on the demo chain</h2>
+        <ol class="try">
+          <li>Download FERRY and open it.</li>
+          <li>Click <strong>Get a demo wallet</strong>. You get a wallet holding fake Orchard coins on
+            our demo chain.</li>
+          <li>Restore it, click <strong>Plan the crossing</strong>, review, and sign.</li>
+          <li>Watch the pieces land over the next half hour; the demo chain makes a block every 10
+            seconds instead of 75.</li>
+        </ol>
+      </section>
+
+      <section id="evidence" class="band">
+        <h2>Evidence</h2>
+        <p class="section-lede">Every claim on this page comes from recorded runs on a real Zcash node
+          (Zebra), with transaction ids.</p>
+        <ul class="evidence">
+          <li><a href="https://github.com/Saber1Y/ferry/tree/main/evidence/regtest-run-1">Run 1</a>: first full migration accepted by a node; the leftover-balance bug found and fixed.</li>
+          <li><a href="https://github.com/Saber1Y/ferry/tree/main/evidence/regtest-run-2">Run 2</a>: 13 crossings in 13 blocks, beside Bob's one-shot migration.</li>
+          <li><a href="https://github.com/Saber1Y/ferry/tree/main/evidence/regtest-run-3">Run 3</a>: the same, driven by FERRY's own engine.</li>
+          <li><a href="https://github.com/Saber1Y/ferry/tree/main/evidence/regtest-run-4">Run 4</a>: a person migrating from the desktop app.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>Built for Zecathon 2026 on librustzcash's <span class="mono">zcash_pool_migration</span>
+        engine, Zebra and lightwalletd. Open source: <a href="https://github.com/Saber1Y/ferry">github.com/Saber1Y/ferry</a>.</p>
+    </footer>
+  </body>
+</html>
