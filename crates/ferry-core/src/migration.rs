@@ -58,6 +58,10 @@ pub const MAX_DELAY_BLOCKS: u32 = 576;
 /// The file in the wallet directory holding the height before which no crossing may be sent.
 const GATE_FILE: &str = "ferry-next-crossing-height";
 
+/// The file in the wallet directory where FERRY records every transaction it broadcasts, one
+/// JSON object per line. It stays on this computer, like the wallet database beside it.
+const HISTORY_FILE: &str = "ferry-history.jsonl";
+
 /// ZIP 318: Orchard value below 0.01 ZEC is dust that stays behind.
 pub const DUST_ZATOSHIS: u64 = 1_000_000;
 
@@ -99,6 +103,23 @@ pub struct PieceProgress {
     /// The engine's state for it, for example `signed`, `proved`, `broadcast` or `mined`.
     pub state: String,
     pub scheduled_height: u32,
+}
+
+/// One transaction FERRY broadcast, as recorded in the local history.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HistoryEntry {
+    /// Seconds since the Unix epoch when it was sent.
+    pub sent_at: u64,
+    /// The chain height the wallet had synced to when it was sent.
+    pub sent_at_height: u32,
+    pub txid: String,
+    /// `"preparation"` or `"crossing"`.
+    pub kind: String,
+    /// For a crossing, the amount it moved into Ironwood, in zatoshis.
+    pub amount: Option<u64>,
+    /// The block it was mined in, once the wallet has seen it. Filled in when read.
+    #[serde(default)]
+    pub mined_height: Option<u32>,
 }
 
 /// The migration's progress.
@@ -267,6 +288,43 @@ impl Wallet {
         Ok(Some(not_before))
     }
 
+    fn record_history(&self, entry: HistoryEntry) -> Result<(), Error> {
+        use std::io::Write;
+        let line = serde_json::to_string(&entry)
+            .map_err(|e| Error::Wallet(format!("could not record history: {e}")))?;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.dir().join(HISTORY_FILE))?;
+        writeln!(file, "{line}")?;
+        Ok(())
+    }
+
+    /// Every transaction FERRY has broadcast for this wallet, newest first, with the block each
+    /// was mined in where the wallet has seen it.
+    pub fn history(&self) -> Result<Vec<HistoryEntry>, Error> {
+        let text = match std::fs::read_to_string(self.dir().join(HISTORY_FILE)) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(e) => return Err(e.into()),
+        };
+        let mut entries: Vec<HistoryEntry> = text
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect();
+
+        let mut conn = self.migration_connection()?;
+        let db = WalletDb::from_connection(&mut conn, self.network(), SystemClock, UnwrapErr(SysRng));
+        for entry in &mut entries {
+            if let Some(txid) = txid_from_display(&entry.txid) {
+                entry.mined_height = db.get_tx_height(txid).ok().flatten().map(u32::from);
+            }
+        }
+        entries.reverse();
+        Ok(entries)
+    }
+
     /// The height before which no crossing may be broadcast.
     pub fn next_crossing_not_before(&self) -> u32 {
         std::fs::read_to_string(self.dir().join(GATE_FILE))
@@ -295,26 +353,17 @@ impl Wallet {
         sync_server: &Server,
         broadcast_server: &Server,
     ) -> Result<SessionOutcome, Error> {
-        let tip = {
-            let mut conn = self.migration_connection()?;
-            let db = WalletDb::from_connection(&mut conn, self.network(), SystemClock, UnwrapErr(SysRng));
-            db.chain_height()
-                .map_err(|e| Error::Wallet(e.to_string()))?
-                .map(u32::from)
-                .unwrap_or(0)
-        };
+        // A finished run is noticed at once, whatever the crossing gate says, so the user hears
+        // about a follow-up run (or completion) without waiting for the next crossing's slot.
+        if !self.migration_progress()?.is_some_and(|p| p.active) {
+            return Ok(match self.plan_migration()? {
+                Some(preview) => SessionOutcome::FollowUpNeeded { preview },
+                None => SessionOutcome::Complete,
+            });
+        }
 
-        if tip >= self.next_crossing_not_before() {
-            match self.try_broadcast(broadcast_server).await? {
-                Broadcasted::Sent(outcome) => return Ok(outcome),
-                Broadcasted::NoMigration => {
-                    return Ok(match self.plan_migration()? {
-                        Some(preview) => SessionOutcome::FollowUpNeeded { preview },
-                        None => SessionOutcome::Complete,
-                    });
-                }
-                Broadcasted::NothingDue => {}
-            }
+        if let Broadcasted::Sent(outcome) = self.try_broadcast(broadcast_server).await? {
+            return Ok(outcome);
         }
 
         self.sync(sync_server).await?;
@@ -338,10 +387,10 @@ impl Wallet {
         let mut store = PoolMigrations::for_account(network, SystemClock, &mut conn, account)
             .map_err(|e| Error::Wallet(e.to_string()))?;
         let Some(mut state) = store.get_migration().map_err(|e| Error::Wallet(e.to_string()))? else {
-            return Ok(Broadcasted::NoMigration);
+            return Ok(Broadcasted::NothingDue);
         };
         if state.is_terminal() {
-            return Ok(Broadcasted::NoMigration);
+            return Ok(Broadcasted::NothingDue);
         }
         let advance = advance_migration(&mut store, &mut state, targets, &config, &mut rng)
             .map_err(|e| Error::Wallet(e.to_string()))?;
@@ -350,6 +399,11 @@ impl Wallet {
         };
         let id = *id;
         let crossing = matches!(kind_of(&state, id), Some(MigrationTxKind::Transfer { .. }));
+        // The random spacing applies to crossings only: preparations are shielded sends to self
+        // and reveal no amount, so they need not wait.
+        if crossing && u32::from(tip) < self.next_crossing_not_before() {
+            return Ok(Broadcasted::NothingDue);
+        }
 
         let tx = store
             .take_transaction_for_broadcast(UnwrapErr(SysRng), &state, id)
@@ -370,6 +424,26 @@ impl Wallet {
         }
         state.mark_broadcast(id);
         store.replace_migration(&state).map_err(|e| Error::Wallet(e.to_string()))?;
+
+        let amount = match kind_of(&state, id) {
+            Some(MigrationTxKind::Transfer { crossing }) => state
+                .denominations()
+                .crossing_values()
+                .get(crossing)
+                .map(|z| z.into_u64()),
+            _ => None,
+        };
+        self.record_history(HistoryEntry {
+            sent_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            sent_at_height: u32::from(tip),
+            txid: txid.to_string(),
+            kind: if crossing { "crossing" } else { "preparation" }.to_owned(),
+            amount,
+            mined_height: None,
+        })?;
 
         let mut next = self.next_crossing_not_before();
         if crossing {
@@ -470,7 +544,6 @@ impl Wallet {
 enum Broadcasted {
     Sent(SessionOutcome),
     NothingDue,
-    NoMigration,
 }
 
 /// Draws the delay before the next crossing: exponential with mean [`MEAN_DELAY_BLOCKS`] from a
@@ -512,6 +585,19 @@ where
         .ok_or_else(|| Error::Wallet("the account has no viewing key".into()))?;
     let index = account.source().key_derivation().map(|d| d.account_index());
     Ok((id, ufvk, index))
+}
+
+/// Parses a transaction id as displayed (hex, bytes reversed, as block explorers show it).
+fn txid_from_display(s: &str) -> Option<TxId> {
+    if s.len() != 64 {
+        return None;
+    }
+    let mut bytes = [0u8; 32];
+    for (i, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(s.get(i * 2..i * 2 + 2)?, 16).ok()?;
+    }
+    bytes.reverse();
+    Some(TxId::from_bytes(bytes))
 }
 
 fn open_connection(path: &Path) -> Result<rusqlite::Connection, Error> {
@@ -779,6 +865,14 @@ impl PoolMigrationWrite for InMemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn txids_round_trip_through_their_display_form() {
+        let shown = "06010823e471d0601ca7987f1291809f1f6d4816120bf376c450c10d75be853d";
+        let txid = txid_from_display(shown).expect("valid txid");
+        assert_eq!(txid.to_string(), shown);
+        assert!(txid_from_display("not a txid").is_none());
+    }
 
     #[test]
     fn delays_follow_zip_318_bounds() {
