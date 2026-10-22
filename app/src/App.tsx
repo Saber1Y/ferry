@@ -32,7 +32,13 @@ export default function App() {
 
   let page: React.ReactNode = <p className="muted">Opening FERRY…</p>;
   if (status && !status.hasWallet) {
-    page = <Restore defaultBirthday={status.defaultBirthday} onRestored={setStatus} />;
+    page = (
+      <Restore
+        defaultBirthday={status.defaultBirthday}
+        demoWalletsUrl={status.demoWalletsUrl}
+        onRestored={setStatus}
+      />
+    );
   } else if (status && view === "history") {
     page = <History />;
   } else if (status && view === "plan") {

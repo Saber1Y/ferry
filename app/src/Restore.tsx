@@ -1,15 +1,18 @@
 import { useState, type FormEvent } from "react";
-import { errorMessage, restoreWallet, sentence, type Status } from "./api";
+import { errorMessage, fetchDemoWallet, restoreWallet, sentence, type Status } from "./api";
 
 const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
 
 export default function Restore({
   defaultBirthday,
+  demoWalletsUrl,
   onRestored,
 }: {
   defaultBirthday: number;
+  demoWalletsUrl: string | null;
   onRestored: (s: Status) => void;
 }) {
+  const [fetchingDemo, setFetchingDemo] = useState(false);
   const [phrase, setPhrase] = useState("");
   const [birthday, setBirthday] = useState(String(defaultBirthday));
   const [understood, setUnderstood] = useState(false);
@@ -21,6 +24,21 @@ export default function Restore({
   const birthdayNum = Number(birthday);
   const birthdayOk = Number.isInteger(birthdayNum) && birthdayNum >= defaultBirthday;
   const canSubmit = wordsOk && birthdayOk && understood && !busy;
+
+  async function useDemoWallet() {
+    if (!demoWalletsUrl) return;
+    setFetchingDemo(true);
+    setError(null);
+    try {
+      const demo = await fetchDemoWallet(demoWalletsUrl);
+      setPhrase(demo.phrase);
+      setBirthday(String(demo.birthday));
+    } catch (err) {
+      setError(`Could not get a demo wallet: ${errorMessage(err)}.`);
+    } finally {
+      setFetchingDemo(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -47,14 +65,35 @@ export default function Restore({
         Bring your wallet aboard.
       </h1>
       <p className="lede">
-        FERRY reads your Orchard balance and, later, signs the whole migration in one sitting. It
-        starts from your recovery phrase.
+        Use the recovery phrase of the wallet whose Orchard funds you want to move (for example
+        Zodl: Settings, Recovery phrase). Your wallet keeps working as before; FERRY keeps only a
+        view-only copy and asks for the phrase again just once, to sign.
       </p>
+
+      {demoWalletsUrl && (
+        <div className="demo-offer">
+          <div>
+            <p className="demo-offer-title">Trying FERRY?</p>
+            <p className="hint">
+              This build runs on a demo chain with fake coins. Get a demo wallet that holds
+              Orchard funds and migrate it for real.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="button button-quiet"
+            onClick={useDemoWallet}
+            disabled={fetchingDemo || busy}
+          >
+            {fetchingDemo ? "Getting one…" : "Get a demo wallet"}
+          </button>
+        </div>
+      )}
 
       <div className="notice notice-warn">
         <strong>Seed mode, said plainly.</strong> While FERRY sets up your wallet, it holds your
         recovery phrase in memory and could spend your funds. The phrase is never written to disk,
-        and it is wiped as soon as the wallet is created. Only do this on your own computer.
+        and it is wiped as soon as the wallet is created. Only do this on your own computer, and do not start a migration in your other wallet at the same time: both would try to move the same funds.
       </div>
 
       <form className="form" onSubmit={submit}>

@@ -57,6 +57,8 @@ export interface Status {
   syncServer: string;
   broadcastServer: string;
   defaultBirthday: number;
+  /** On the hosted demo chain: where to fetch a demo wallet. */
+  demoWalletsUrl: string | null;
   hasWallet: boolean;
   balances: Balances | null;
   progress: Progress | null;
@@ -82,6 +84,14 @@ export const restoreWallet = (phrase: string, birthday: number) =>
   invoke<Status>("restore_wallet", { phrase, birthday });
 
 export const syncWallet = () => invoke<Status>("sync_wallet");
+
+/** Asks the hosted demo chain for an unused demo wallet (fake coins). */
+export async function fetchDemoWallet(url: string): Promise<{ phrase: string; birthday: number }> {
+  const response = await fetch(url, { cache: "no-store" });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw body.error ?? `the demo server answered ${response.status}`;
+  return body;
+}
 
 export const planMigration = () => invoke<PlanPreview | null>("plan_migration");
 

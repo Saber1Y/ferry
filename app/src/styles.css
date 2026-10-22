@@ -787,3 +787,24 @@ body {
 .txid-action {
   color: var(--ink-faint);
 }
+
+.demo-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  border: 1px dashed var(--ironwood);
+  border-radius: var(--radius);
+  background: var(--ironwood-wash);
+}
+
+.demo-offer-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.demo-offer .hint {
+  margin: 0;
+}

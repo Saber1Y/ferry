@@ -137,6 +137,14 @@ export default function Plan({
           </dd>
         </div>
         <div>
+          <dt>Why these amounts</dt>
+          <dd>
+            Since NU6.3, Orchard funds cannot be used for ordinary payments, only moved out, so
+            FERRY moves all of it. The pieces are the standard sizes every migrating wallet uses;
+            amounts you picked yourself would stand out on the chain and point back to you.
+          </dd>
+        </div>
+        <div>
           <dt>Strangers see</dt>
           <dd>Standard-size crossings at random times, the same shape as everyone else's.</dd>
         </div>
