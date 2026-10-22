@@ -32,3 +32,6 @@ regtest/chain/
 
 # Python bytecode
 __pycache__/
+
+# Generated demo wallet phrases (fake regtest coins, still never committed)
+deploy/demo-server/out/

@@ -1,0 +1,13 @@
+
+# FERRY demo chain (regtest, fake coins). Added by deploy/demo-server.
+sync.ferry.162-62-231-147.sslip.io {
+	reverse_proxy h2c://127.0.0.1:19067
+}
+
+send.ferry.162-62-231-147.sslip.io {
+	reverse_proxy h2c://127.0.0.1:19077
+}
+
+wallets.ferry.162-62-231-147.sslip.io {
+	reverse_proxy 127.0.0.1:19100
+}
