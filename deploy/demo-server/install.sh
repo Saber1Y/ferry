@@ -61,7 +61,7 @@ Requires=ferry-zebrad.service
 
 [Service]
 User=ferry
-ExecStart=$PREFIX/bin/lightwalletd --no-tls-very-insecure --grpc-bind-addr 127.0.0.1:$port --http-bind-addr 127.0.0.1:$((port + 1)) --rpchost 127.0.0.1 --rpcport 18232 --rpcuser x --rpcpassword x --data-dir $STATE/lwd-$name --log-file /dev/stdout
+ExecStart=$PREFIX/bin/lightwalletd --no-tls-very-insecure --grpc-bind-addr 127.0.0.1:$port --http-bind-addr 127.0.0.1:$((port + 1)) --rpchost 127.0.0.1 --rpcport 18232 --rpcuser x --rpcpassword x --data-dir $STATE/lwd-$name --log-file $STATE/lwd-$name/lightwalletd.log
 Restart=on-failure
 MemoryMax=150M
 
