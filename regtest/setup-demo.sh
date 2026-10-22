@@ -37,12 +37,41 @@ while n:
 print('1' * (len(c) - len(c.lstrip(b'\0'))) + s)"
 }
 
+# Runs a command with a time limit (macOS has no `timeout`).
+with_timeout() {
+  local seconds=$1; shift
+  perl -e 'alarm shift; exec @ARGV' "$seconds" "$@"
+}
+
+# Waits until the sync server reports the node's current tip. A freshly started lightwalletd
+# can lag the node, and wallet creation has been seen to hang when it asks too early.
+wait_for_sync_server() {
+  local want
+  want=$("$HERE/chain.sh" height)
+  for _ in $(seq 1 60); do
+    # lightwalletd logs "Waiting for block: N+1" once it has ingested block N.
+    if grep -q "Waiting for block: $((want + 1))\"" "$CHAIN/lwd-a.log" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "sync server did not reach height $want" >&2
+  exit 1
+}
+
 new_wallet() {
-  local name=$1 w="$WALLETS/$1"
-  mkdir -p "$w"
-  "$DT" wallet -w "$w" init --name "$name" -i "$w/identity.txt" --birthday 2 \
-    -n regtest --activation-heights "$HERE/activation-heights.toml" \
-    -s "$SYNC_SERVER" --connection direct 2>&1 | quiet > /dev/null
+  local name=$1 w="$WALLETS/$1" attempt
+  for attempt in 1 2; do
+    rm -rf "$w"
+    mkdir -p "$w"
+    wait_for_sync_server
+    if with_timeout 60 "$DT" wallet -w "$w" init --name "$name" -i "$w/identity.txt" --birthday 2 \
+      -n regtest --activation-heights "$HERE/activation-heights.toml" \
+      -s "$SYNC_SERVER" --connection direct > /dev/null 2>&1; then
+      break
+    fi
+    echo "wallet init for $name did not finish (attempt $attempt), retrying" >&2
+  done
   "$DT" wallet -w "$w" list-addresses 2>/dev/null | sed -n 's/.*Default Address: //p' > "$w/address.txt"
   [ -s "$w/address.txt" ] || { echo "could not create wallet $name" >&2; exit 1; }
   echo "$name: $(cut -c1-24 "$w/address.txt")..."
