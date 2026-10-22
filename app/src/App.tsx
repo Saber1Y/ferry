@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { errorMessage, getStatus, onSession, type Status } from "./api";
 import Crossing from "./Crossing";
+import History from "./History";
 import Home from "./Home";
 import Plan from "./Plan";
 import Restore from "./Restore";
 
-type View = "main" | "plan";
+type View = "main" | "plan" | "history";
 
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -32,6 +33,8 @@ export default function App() {
   let page: React.ReactNode = <p className="muted">Opening FERRY…</p>;
   if (status && !status.hasWallet) {
     page = <Restore defaultBirthday={status.defaultBirthday} onRestored={setStatus} />;
+  } else if (status && view === "history") {
+    page = <History />;
   } else if (status && view === "plan") {
     page = (
       <Plan
@@ -57,6 +60,24 @@ export default function App() {
           FERRY
         </div>
         <p className="rail-tagline">Orchard to Ironwood, the private way.</p>
+        {status?.hasWallet && (
+          <nav className="rail-nav" aria-label="Sections">
+            <button
+              className={view !== "history" ? "rail-link rail-link-active" : "rail-link"}
+              aria-current={view !== "history" ? "page" : undefined}
+              onClick={() => setView("main")}
+            >
+              Crossing
+            </button>
+            <button
+              className={view === "history" ? "rail-link rail-link-active" : "rail-link"}
+              aria-current={view === "history" ? "page" : undefined}
+              onClick={() => setView("history")}
+            >
+              History
+            </button>
+          </nav>
+        )}
         {status && (
           <dl className="rail-facts">
             <div>

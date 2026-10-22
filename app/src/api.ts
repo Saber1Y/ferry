@@ -63,7 +63,19 @@ export interface Status {
   scheduler: SchedulerState;
 }
 
+/** One transaction FERRY sent (mirrors ferry_core::HistoryEntry). */
+export interface HistoryEntry {
+  sent_at: number;
+  sent_at_height: number;
+  txid: string;
+  kind: "preparation" | "crossing";
+  amount: number | null;
+  mined_height: number | null;
+}
+
 export const getStatus = () => invoke<Status>("get_status");
+
+export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
 /** The phrase is handed to the Rust side immediately; callers must clear their copy. */
 export const restoreWallet = (phrase: string, birthday: number) =>

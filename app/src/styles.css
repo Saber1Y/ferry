@@ -700,3 +700,90 @@ body {
 .ledger-next .ledger-state {
   color: var(--orchard);
 }
+
+/* Sidebar navigation. */
+
+.rail-nav {
+  display: grid;
+  gap: 2px;
+  margin: 4px -10px 0;
+}
+
+.rail-link {
+  font: 500 14px/1 var(--font);
+  text-align: left;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.rail-link:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.rail-link-active {
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: inset 2px 0 0 var(--ironwood);
+}
+
+/* History. */
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 140px 150px;
+  gap: 12px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 14px;
+}
+
+.history-when,
+.history-block {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.history-crossing .history-what .mono {
+  color: var(--ironwood);
+}
+
+.history-preparation .history-what {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.txid {
+  display: inline-flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.txid:hover {
+  border-color: var(--rule);
+}
+
+.txid-action {
+  color: var(--ink-faint);
+}
