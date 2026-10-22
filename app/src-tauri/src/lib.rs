@@ -18,14 +18,21 @@ use tauri::RunEvent;
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tokio::sync::Mutex;
 
-/// Settings the app runs with. The hackathon build targets the local regtest chain from
-/// `regtest/setup-demo.sh`; mainnet is not enabled yet.
+/// The hosted demo chain (regtest, fake coins) set up by `deploy/demo-server`.
+const DEMO_SYNC_HOST: &str = "sync.ferry.162-62-231-147.sslip.io";
+const DEMO_SEND_HOST: &str = "send.ferry.162-62-231-147.sslip.io";
+const DEMO_WALLETS_URL: &str = "https://wallets.ferry.162-62-231-147.sslip.io/demo-wallet";
+
+/// Settings the app runs with. The hackathon build runs against regtest chains only (the hosted
+/// demo chain, or one on this computer); mainnet is not enabled yet.
 struct Config {
     network: FerryNetwork,
     network_name: &'static str,
     /// ZIP 318: sync from one server, broadcast through a different one.
     sync_server: Server,
     broadcast_server: Server,
+    /// Where the hosted demo chain hands out demo wallets, if this network has one.
+    wallets_url: Option<&'static str>,
     wallet_dir: PathBuf,
     /// How often the scheduler runs a session. A session does nothing visible unless a block
     /// arrived or something became due, so this only bounds how late FERRY notices.
@@ -58,6 +65,8 @@ struct Status {
     sync_server: String,
     broadcast_server: String,
     default_birthday: u32,
+    /// Where to fetch a demo wallet, on the hosted demo chain.
+    demo_wallets_url: Option<&'static str>,
     has_wallet: bool,
     balances: Option<Balances>,
     progress: Option<Progress>,
@@ -82,6 +91,7 @@ async fn status_of(state: &AppState) -> CmdResult<Status> {
         sync_server: config.sync_server.to_string(),
         broadcast_server: config.broadcast_server.to_string(),
         default_birthday: config.network.lowest_birthday(),
+        demo_wallets_url: config.wallets_url,
         has_wallet,
         balances,
         progress,
@@ -319,16 +329,39 @@ pub fn run() {
                 )?;
             }
             // FERRY_WALLET_DIR lets a demo point the app at a prepared wallet folder.
+            // Which network to run against: the hosted demo chain by default in release
+            // builds, this computer's regtest chain in development. FERRY_NETWORK overrides.
+            let network_name = match std::env::var("FERRY_NETWORK").as_deref() {
+                Ok("local") => "local",
+                Ok("demo") => "demo",
+                _ if cfg!(debug_assertions) => "local",
+                _ => "demo",
+            };
+            let (sync_server, broadcast_server, wallets_url) = match network_name {
+                // The hosted demo chain (deploy/demo-server): fake coins, served over HTTPS.
+                "demo" => (
+                    Server::new(DEMO_SYNC_HOST, 443),
+                    Server::new(DEMO_SEND_HOST, 443),
+                    Some(DEMO_WALLETS_URL),
+                ),
+                _ => (
+                    Server::new("127.0.0.1", 9067),
+                    Server::new("127.0.0.1", 9077),
+                    None,
+                ),
+            };
+            // FERRY_WALLET_DIR lets a demo point the app at a prepared wallet folder.
             let wallet_dir = match std::env::var_os("FERRY_WALLET_DIR") {
                 Some(dir) => PathBuf::from(dir),
-                None => app.path().app_data_dir()?.join("wallets").join("regtest"),
+                None => app.path().app_data_dir()?.join("wallets").join(network_name),
             };
             let config = Config {
-                // Matches regtest/heights.env.
+                // Both chains use regtest/heights.env: upgrades through NU6.2 at 1, NU6.3 at 300.
                 network: FerryNetwork::regtest(1, 300),
-                network_name: "regtest",
-                sync_server: Server::new("127.0.0.1", 9067),
-                broadcast_server: Server::new("127.0.0.1", 9077),
+                network_name,
+                sync_server,
+                broadcast_server,
+                wallets_url,
                 wallet_dir,
                 session_interval: Duration::from_secs(3),
             };
