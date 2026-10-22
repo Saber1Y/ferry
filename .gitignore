@@ -29,3 +29,6 @@ regtest/chain/
 
 # Third-party tools built locally (zcash-devtool, lightwalletd)
 .deps/
+
+# Python bytecode
+__pycache__/
