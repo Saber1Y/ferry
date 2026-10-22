@@ -232,6 +232,41 @@ impl Wallet {
         Ok(Some(progress_of(&state, self.next_crossing_not_before())))
     }
 
+    /// Catch-up after the app was closed or the computer slept (ZIP 318, "Fallback on
+    /// application open"): if a crossing is already overdue, hold the next one back by a fresh
+    /// random delay from the current chain height, so nothing is sent right as the app opens or
+    /// the lid lifts. Overdue crossings then go out one per session, each a random gap apart.
+    ///
+    /// Asks `sync_server` for the chain height (the wallet's own view may be hours old). Returns
+    /// the new not-before height if it moved the gate.
+    pub async fn defer_overdue_crossings(&self, sync_server: &Server) -> Result<Option<u32>, Error> {
+        let Some(progress) = self.migration_progress()? else {
+            return Ok(None);
+        };
+        if !progress.active {
+            return Ok(None);
+        }
+        let mut client = sync_server.connect().await?;
+        let tip = client
+            .get_latest_block(service::ChainSpec::default())
+            .await?
+            .into_inner()
+            .height;
+        let tip = u32::try_from(tip).expect("block heights fit in u32");
+
+        let overdue = progress.pieces.iter().any(|p| {
+            p.kind == "crossing"
+                && matches!(p.state.as_str(), "signed" | "proved")
+                && p.scheduled_height <= tip
+        });
+        if !overdue || self.next_crossing_not_before() > tip {
+            return Ok(None);
+        }
+        let not_before = tip + draw_delay(&mut UnwrapErr(SysRng));
+        self.set_next_crossing_not_before(not_before)?;
+        Ok(Some(not_before))
+    }
+
     /// The height before which no crossing may be broadcast.
     pub fn next_crossing_not_before(&self) -> u32 {
         std::fs::read_to_string(self.dir().join(GATE_FILE))
