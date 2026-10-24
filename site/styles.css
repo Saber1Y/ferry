@@ -197,6 +197,8 @@ h1 {
 .band {
   padding: 56px 0;
   border-top: 1px solid var(--rule);
+  /* Anchor jumps land below the sticky header, not under it. */
+  scroll-margin-top: 40px;
 }
 
 h2 {
@@ -357,6 +359,68 @@ h2 {
   color: var(--ink-soft);
 }
 
+/* Download */
+
+.downloads {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.downloads a {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+
+.downloads a:hover {
+  background: var(--paper-raised);
+}
+
+.downloads a:hover .dl-file {
+  color: var(--ironwood);
+}
+
+.dl-os {
+  font-weight: 600;
+}
+
+.dl-detail {
+  color: var(--ink-soft);
+}
+
+.dl-file {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.first-launch {
+  margin: 24px 0 0;
+  font-size: 14px;
+}
+
+.first-launch div {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 16px;
+  padding: 4px 4px;
+}
+
+.first-launch dt {
+  color: var(--ink-faint);
+}
+
+.first-launch dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
 /* Try and evidence */
 
 .try,
@@ -396,6 +460,29 @@ h2 {
 
   .steps {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .downloads a {
+    grid-template-columns: 1fr auto;
+    gap: 2px 16px;
+  }
+
+  .dl-detail {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 14px;
+  }
+
+  .dl-file {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    align-self: center;
+  }
+
+  .first-launch div {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 6px 4px;
   }
 }
 

@@ -18,6 +18,7 @@
       <nav aria-label="Sections">
         <a href="#why">Why</a>
         <a href="#how">How it works</a>
+        <a href="#download">Download</a>
         <a href="#try">Try it</a>
         <a href="#evidence">Evidence</a>
       </nav>
@@ -34,12 +35,12 @@
           signed once, sent one at a time at random intervals.
         </p>
         <div class="cta">
-          <a class="button button-primary" href="https://github.com/Saber1Y/ferry/releases/latest">Download for macOS</a>
-          <a class="button" href="https://github.com/Saber1Y/ferry/releases/latest">Windows &amp; Linux</a>
+          <a class="button button-primary" href="#download">Download</a>
+          <a class="button" href="#try">Try it on the demo chain</a>
         </div>
         <p class="fine">
-          Hackathon build for Zecathon 2026. It runs on a demo chain with fake coins; mainnet is not
-          enabled yet. Unsigned installers: macOS asks you to confirm the first launch.
+          For macOS, Windows and Linux. Hackathon build for Zecathon 2026: it runs on a demo chain with
+          fake coins, and mainnet is not enabled yet.
         </p>
       </section>
 
@@ -125,6 +126,54 @@
             <dd>Standard amounts hide you among the other wallets migrating at the same time. On a
               demo chain that crowd is small; on mainnet it is every ZIP 318 wallet.</dd>
           </div>
+        </dl>
+      </section>
+
+      <section id="download" class="band">
+        <h2>Download</h2>
+        <p class="section-lede">Version 0.1.0. The installers are not signed yet, so your computer asks
+          you to confirm the first launch.</p>
+        <ul class="downloads">
+          <li>
+            <a href="https://github.com/Saber1Y/ferry/releases/download/v0.1.0/FERRY_0.1.0_aarch64.dmg">
+              <span class="dl-os">macOS</span>
+              <span class="dl-detail">Apple silicon (M1 and later)</span>
+              <span class="mono dl-file">.dmg · 11.9 MB</span>
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/Saber1Y/ferry/releases/download/v0.1.0/FERRY_0.1.0_x64.dmg">
+              <span class="dl-os">macOS</span>
+              <span class="dl-detail">Intel</span>
+              <span class="mono dl-file">.dmg · 12.4 MB</span>
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/Saber1Y/ferry/releases/download/v0.1.0/FERRY_0.1.0_x64-setup.exe">
+              <span class="dl-os">Windows</span>
+              <span class="dl-detail">Windows 10 and 11, 64-bit</span>
+              <span class="mono dl-file">.exe · 8.2 MB</span>
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/Saber1Y/ferry/releases/download/v0.1.0/FERRY_0.1.0_amd64.deb">
+              <span class="dl-os">Linux</span>
+              <span class="dl-detail">Debian and Ubuntu, 64-bit</span>
+              <span class="mono dl-file">.deb · 13.7 MB</span>
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/Saber1Y/ferry/releases/download/v0.1.0/FERRY_0.1.0_amd64.AppImage">
+              <span class="dl-os">Linux</span>
+              <span class="dl-detail">Any distribution, 64-bit</span>
+              <span class="mono dl-file">.AppImage · 91 MB</span>
+            </a>
+          </li>
+        </ul>
+        <dl class="first-launch">
+          <div><dt>macOS</dt><dd>Right-click FERRY in Applications, choose Open, then confirm.</dd></div>
+          <div><dt>Windows</dt><dd>On "Windows protected your PC", click More info, then Run anyway.</dd></div>
+          <div><dt>Linux</dt><dd><span class="mono">sudo apt install ./FERRY_0.1.0_amd64.deb</span>, or make the AppImage executable and run it.</dd></div>
         </dl>
       </section>
 
