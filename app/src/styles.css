@@ -808,3 +808,9 @@ body {
 .demo-offer .hint {
   margin: 0;
 }
+
+/* Wider fonts (Linux's DejaVu) would otherwise wrap the label onto two lines. */
+.demo-offer .button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
