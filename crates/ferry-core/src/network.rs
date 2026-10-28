@@ -37,20 +37,19 @@ impl FerryNetwork {
     }
 
     /// The lowest wallet birthday FERRY accepts, and the default when the user does not know
-    /// theirs: the first block that could hold shielded funds.
+    /// theirs: the first block that could hold Orchard funds.
     ///
     /// On regtest Sapling activates at height 1, and scanning from there makes the sync ask
     /// lightwalletd for the tree state at height 0, which lightwalletd reads as "no height
     /// given" and rejects. The local chain's block 1 never holds wallet funds (see
     /// `regtest/setup-demo.sh`), so regtest starts at 2.
     pub fn lowest_birthday(&self) -> u32 {
-        let sapling = self
-            .activation_height(NetworkUpgrade::Sapling)
-            .map(u32::from)
-            .unwrap_or(1);
+        let height = |nu| self.activation_height(nu).map(u32::from).unwrap_or(1);
         match self {
-            FerryNetwork::Regtest(_) => sapling.max(2),
-            _ => sapling,
+            FerryNetwork::Regtest(_) => height(NetworkUpgrade::Sapling).max(2),
+            // FERRY only moves Orchard funds, and Orchard began at NU5: scanning from Sapling
+            // would add years of blocks that cannot hold anything to migrate.
+            _ => height(NetworkUpgrade::Nu5),
         }
     }
 
@@ -102,7 +101,7 @@ mod tests {
             FerryNetwork::Main.ironwood_activation(),
             Some(BlockHeight::from_u32(3_428_143))
         );
-        // Sapling activation on mainnet.
-        assert_eq!(FerryNetwork::Main.lowest_birthday(), 419_200);
+        // Orchard began at NU5 on mainnet.
+        assert_eq!(FerryNetwork::Main.lowest_birthday(), 1_687_104);
     }
 }

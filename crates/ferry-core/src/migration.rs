@@ -157,6 +157,20 @@ impl Wallet {
         open_connection(&self.dir().join(WALLET_DB))
     }
 
+    /// An address with only an Orchard receiver, derived from the viewing key. Since NU6.3 only
+    /// someone who already holds Orchard funds can send to it, Orchard to Orchard; a wallet sending
+    /// from any other pool has no receiver here it may use.
+    pub fn orchard_address(&self) -> Result<String, Error> {
+        let network = self.network();
+        let mut conn = self.migration_connection()?;
+        let db = WalletDb::from_connection(&mut conn, network, SystemClock, UnwrapErr(SysRng));
+        let (_, ufvk, _) = account_of(&db)?;
+        let (address, _) = ufvk
+            .default_address(zcash_keys::keys::UnifiedAddressRequest::ORCHARD)
+            .map_err(|e| Error::Wallet(format!("could not derive an Orchard address: {e:?}")))?;
+        Ok(address.encode(&network))
+    }
+
     /// Previews the next migration run without changing anything. `None` if there is nothing
     /// above dust to migrate.
     pub fn plan_migration(&self) -> Result<Option<PlanPreview>, Error> {
