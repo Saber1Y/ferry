@@ -2,7 +2,7 @@
 
 ![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg)
 ![Tests](https://img.shields.io/badge/tests-9%20passing-brightgreen)
-![Network](https://img.shields.io/badge/network-Zcash%20demo%20chain%20(regtest)-blue)
+![Network](https://img.shields.io/badge/network-demo%20chain%20+%20mainnet%20(experimental)-blue)
 ![Loop](https://img.shields.io/badge/loop-plan%20%E2%86%92%20sign%20once%20%E2%86%92%20cross%20at%20random-blueviolet)
 ![Stack](https://img.shields.io/badge/stack-Rust%20+%20librustzcash%20+%20Tauri%202%20+%20React-orange)
 
@@ -17,7 +17,7 @@ Landing page: https://ferry-rose.vercel.app · Downloads: [GitHub releases](http
 [Try it](#see-it-in-one-download) · [Why it matters](#the-one-rule) · [Architecture](#architecture) · [Evidence](#whats-real-vs-pending) · [Run it locally](#run-it-locally)
 
 Built for Zecathon 2026, Core & Tooling track. Licensed MIT OR Apache-2.0.
-FERRY is not a custodial service: it never holds your funds, and it is a hackathon build that has not run on mainnet.
+FERRY is not a custodial service: it never holds your funds, and it is a hackathon build that has migrated wallets on demo chains, not yet on mainnet.
 
 ## Table of contents
 
@@ -247,8 +247,15 @@ flowchart TB
 
 **Writes** (broadcast server): preparation transactions (shielded Orchard sends to self) and crossings (Orchard to Ironwood transfers in canonical amounts), one per broadcast session.
 
-The demo chain is a regtest Zebra node with NU6.3 at block 300; its lightwalletd servers are at `sync.ferry.162-62-231-147.sslip.io:443` and `send.ferry.162-62-231-147.sslip.io:443`.
-NU6.3 activated on mainnet at block 3,428,143 (in the summer of 2026), so mainnet Orchard holders are migrating now; `ferry-core` carries mainnet's parameters, but the app offers only the demo chain and the local regtest chain in this build.
+The app switches between two networks in its side panel; each keeps its own wallet.
+
+| Network | Sync server | Broadcast server | Coins |
+| --- | --- | --- | --- |
+| Demo chain | `sync.ferry.162-62-231-147.sslip.io:443` | `send.ferry.162-62-231-147.sslip.io:443` | Fake, handed out by **Get a demo wallet** |
+| Mainnet (experimental) | `zec.rocks:443` | `zcash.mysideoftheweb.com:9067` | Real ZEC; the two servers belong to different operators |
+
+NU6.3 activated on mainnet at block 3,428,143 (in the summer of 2026), so mainnet Orchard holders are migrating now.
+The demo chain is a regtest Zebra node with NU6.3 at block 300, and it enforces the same consensus rules as mainnet: both report consensus branch `37a5165b` (NU6.3), which `cargo run -p ferry-core --example server_info -- main <server>` checks against any lightwalletd server.
 
 ## Engineering decisions and the hard problems
 
@@ -278,7 +285,9 @@ NU6.3 activated on mainnet at block 3,428,143 (in the summer of 2026), so mainne
 | Apple silicon macOS installer | Real - migrations on the demo chain |
 | Windows installer | Built and checked for missing DLLs; not yet run on Windows |
 | Linux AppImage | Built from the same app as the tested `.deb`; not run on its own |
-| Mainnet | Not yet established - switched off until it can be tested |
+| Mainnet mode | Real - restores and syncs a wallet to the live mainnet tip through two independent public servers, both verified on NU6.3 |
+| Demo chain enforces mainnet's rules | Real - both report consensus branch `37a5165b` |
+| A migration on mainnet | Not yet established - it needs a wallet that already held Orchard funds before NU6.3, because nobody can receive Orchard funds since |
 | Tor for server connections | Not yet established - servers can see the user's IP address |
 | Signed installers | Not yet established |
 
@@ -343,7 +352,7 @@ See [packaging/README.md](packaging/README.md) for the one-time setup.
 
 | Variable | Purpose |
 | --- | --- |
-| `FERRY_NETWORK` | `demo` for the hosted demo chain, `local` for the local regtest chain; release builds default to `demo`, debug builds to `local` |
+| `FERRY_NETWORK` | `demo`, `mainnet` or `local` (this computer's regtest chain); overrides the network chosen in the side panel. Release builds start on `demo`, debug builds on `local` |
 | `FERRY_WALLET_DIR` | Use this wallet folder instead of the one in the app's data folder |
 | `FERRY_SYNC`, `FERRY_BROADCAST` | `host:port` overrides for the `migrate` example in `crates/ferry-core/examples` |
 
@@ -368,7 +377,7 @@ vercel deploy --prod
 ```text
 ferry/
 ├── crates/ferry-core/      # wallet, planning, signing, sessions (Rust)
-│   └── examples/           # restore_and_sync and migrate, the same calls the app makes
+│   └── examples/           # restore_and_sync, migrate, server_info, orchard_address
 ├── app/                    # Tauri 2 desktop app
 │   ├── src/                # React UI
 │   └── src-tauri/          # commands, scheduler, tray
@@ -394,7 +403,7 @@ The migration engine and wallet libraries are Electric Coin Company's librustzca
 
 ### Roadmap
 
-- Mainnet, once it can be tested end to end
+- A first mainnet migration, with a wallet that still holds Orchard funds
 - Tor for both server connections, so servers cannot see the user's IP address
 - Signed installers for macOS and Windows
 - A shared crowd: more ZIP 318 wallets migrating in the same windows
@@ -402,7 +411,8 @@ The migration engine and wallet libraries are Electric Coin Company's librustzca
 ## Disclaimer and license
 
 FERRY is a hackathon build for Zecathon 2026.
-It has only run on regtest chains with fake coins, it is not audited, and it must not be used with real funds yet.
+It has migrated wallets only on regtest chains with fake coins; its mainnet mode syncs real wallets but has not moved real funds yet, and it is not audited.
+On mainnet, use only a small amount.
 It never takes custody of funds: it runs on the user's own computer and stores no spending key.
 
 **License: MIT OR Apache-2.0.**
