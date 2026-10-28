@@ -1,6 +1,6 @@
 [package]
 name = "ferry-app"
-version = "0.1.0"
+version = "0.1.1"
 description = "FERRY desktop app: move your ZEC from Orchard to Ironwood privately"
 edition.workspace = true
 rust-version.workspace = true
