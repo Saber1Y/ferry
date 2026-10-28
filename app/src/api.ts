@@ -81,8 +81,8 @@ export const getStatus = () => invoke<Status>("get_status");
 
 export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
-/** Switches network; FERRY restarts on it, so this only returns on an error. */
-export const setNetwork = (network: string) => invoke<void>("set_network", { network });
+/** Switches network in place; each network keeps its own wallet. */
+export const setNetwork = (network: string) => invoke<Status>("set_network", { network });
 
 /** The phrase is handed to the Rust side immediately; callers must clear their copy. */
 export const restoreWallet = (phrase: string, birthday: number) =>

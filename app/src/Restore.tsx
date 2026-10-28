@@ -1,34 +1,19 @@
 import { useState, type FormEvent } from "react";
-import {
-  errorMessage,
-  fetchDemoWallet,
-  restoreWallet,
-  sentence,
-  setNetwork,
-  type Status,
-} from "./api";
+import { errorMessage, fetchDemoWallet, restoreWallet, sentence, type Status } from "./api";
 
 const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
 
-const NETWORK_LABELS: Record<string, { name: string; detail: string }> = {
-  demo: { name: "Demo chain", detail: "fake coins" },
-  mainnet: { name: "Mainnet", detail: "real ZEC" },
-};
-
 export default function Restore({
   network,
-  networks,
   defaultBirthday,
   demoWalletsUrl,
   onRestored,
 }: {
   network: string;
-  networks: string[];
   defaultBirthday: number;
   demoWalletsUrl: string | null;
   onRestored: (s: Status) => void;
 }) {
-  const [switching, setSwitching] = useState(false);
   const [fetchingDemo, setFetchingDemo] = useState(false);
   const [phrase, setPhrase] = useState("");
   const [birthday, setBirthday] = useState(String(defaultBirthday));
@@ -54,18 +39,6 @@ export default function Restore({
       setError(`Could not get a demo wallet: ${errorMessage(err)}.`);
     } finally {
       setFetchingDemo(false);
-    }
-  }
-
-  async function switchNetwork(next: string) {
-    if (next === network || switching) return;
-    setSwitching(true);
-    setError(null);
-    try {
-      await setNetwork(next);
-    } catch (err) {
-      setError(`Could not switch network: ${errorMessage(err)}.`);
-      setSwitching(false);
     }
   }
 
@@ -99,31 +72,10 @@ export default function Restore({
         view-only copy and asks for the phrase again just once, to sign.
       </p>
 
-      {networks.length > 1 && (
-        <div className="network-switch" role="group" aria-label="Network">
-          {networks.map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={n === network ? "network-option network-option-active" : "network-option"}
-              aria-pressed={n === network}
-              onClick={() => switchNetwork(n)}
-              disabled={switching || busy}
-            >
-              <span className="network-name">{NETWORK_LABELS[n]?.name ?? n}</span>
-              <span className="network-detail">{NETWORK_LABELS[n]?.detail}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {network === "mainnet" && (
-        <div className="notice notice-mainnet" role="note">
-          <strong>Mainnet is experimental.</strong> FERRY has migrated wallets end to end on demo
-          chains; on mainnet, start with a small amount you can afford to lose. It syncs from{" "}
-          <span className="mono">zec.rocks</span> and broadcasts through{" "}
-          <span className="mono">zcash.mysideoftheweb.com</span>, two different operators, without
-          Tor, so they can see your IP address.
+        <div className="notice notice-warn" role="note">
+          <strong>Real ZEC.</strong> FERRY has migrated wallets end to end on demo chains; on
+          mainnet, start with a small amount.
         </div>
       )}
 

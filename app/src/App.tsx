@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { errorMessage, getStatus, onSession, type Status } from "./api";
+import { errorMessage, getStatus, onSession, setNetwork, type Status } from "./api";
 import Crossing from "./Crossing";
 import History from "./History";
 import Home from "./Home";
@@ -8,10 +8,14 @@ import Restore from "./Restore";
 
 type View = "main" | "plan" | "history";
 
+const NETWORK_LABELS: Record<string, string> = { demo: "Demo chain", mainnet: "Mainnet" };
+
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [view, setView] = useState<View>("main");
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     getStatus()
@@ -29,13 +33,27 @@ export default function App() {
   }, [refresh]);
 
   const migrating = !!status?.progress?.active || !!status?.scheduler.followUp;
+  const crossing = !!status?.scheduler.running;
+
+  async function switchNetwork(next: string) {
+    if (!status || next === status.network || switching) return;
+    setSwitching(true);
+    setSwitchError(null);
+    try {
+      setStatus(await setNetwork(next));
+      setView("main");
+    } catch (e) {
+      setSwitchError(errorMessage(e));
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   let page: React.ReactNode = <p className="muted">Opening FERRY…</p>;
   if (status && !status.hasWallet) {
     page = (
       <Restore
         network={status.network}
-        networks={status.networks}
         defaultBirthday={status.defaultBirthday}
         demoWalletsUrl={status.demoWalletsUrl}
         onRestored={setStatus}
@@ -91,7 +109,34 @@ export default function App() {
             <div>
               <dt>Network</dt>
               <dd>
-                <span className="badge">{status.network}</span>
+                {status.networks.length > 1 ? (
+                  <>
+                    <div className="network-switch" role="group" aria-label="Network">
+                      {status.networks.map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          className={
+                            n === status.network
+                              ? "network-option network-option-active"
+                              : "network-option"
+                          }
+                          aria-pressed={n === status.network}
+                          onClick={() => switchNetwork(n)}
+                          disabled={switching || crossing}
+                        >
+                          {NETWORK_LABELS[n] ?? n}
+                        </button>
+                      ))}
+                    </div>
+                    {crossing && (
+                      <p className="network-hint">Switch once this migration has finished.</p>
+                    )}
+                    {switchError && <p className="network-hint">{switchError}</p>}
+                  </>
+                ) : (
+                  <span className="badge">{status.network}</span>
+                )}
               </dd>
             </div>
             <div>

@@ -211,37 +211,26 @@ body {
   color: var(--error-ink);
 }
 
-/* Real money: the error palette, with a rule so it reads as a standing warning, not a failure. */
-.notice-mainnet {
-  background: var(--error-wash);
-  color: var(--error-ink);
-  border-left: 3px solid var(--error-ink);
-}
-
-/* Network switch */
+/* Network switch (side panel) */
 
 .network-switch {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  margin-bottom: 22px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
   border: 1px solid var(--rule);
   border-radius: calc(var(--radius) + 2px);
   background: var(--paper-raised);
 }
 
 .network-option {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 7px 14px;
+  flex: 1;
+  padding: 5px 8px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
   color: var(--ink-soft);
-  font: inherit;
-  text-align: left;
+  font: 500 13px/1.2 var(--font);
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
 }
@@ -250,29 +239,22 @@ body {
   color: var(--ink);
 }
 
-.network-option-active {
+.network-option-active,
+.network-option-active:hover:not(:disabled) {
   background: var(--ink);
   color: var(--paper);
   cursor: default;
 }
 
-.network-option-active:hover:not(:disabled) {
-  color: var(--paper);
-}
-
 .network-option:disabled:not(.network-option-active) {
   opacity: 0.5;
-  cursor: progress;
+  cursor: not-allowed;
 }
 
-.network-name {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.network-detail {
+.network-hint {
+  margin: 6px 0 0;
   font-size: 12px;
-  opacity: 0.75;
+  color: var(--ink-faint);
 }
 
 /* Form */
