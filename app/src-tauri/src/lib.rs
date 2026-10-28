@@ -61,7 +61,8 @@ struct SchedulerState {
 }
 
 struct AppState {
-    config: Config,
+    /// Replaced when the window switches network; readers take a snapshot.
+    config: std::sync::RwLock<Arc<Config>>,
     /// Serialises wallet operations: one sync, restore, commit or session at a time.
     busy: Mutex<()>,
     scheduler: Mutex<SchedulerState>,
@@ -84,11 +85,17 @@ struct Status {
     scheduler: SchedulerState,
 }
 
+impl AppState {
+    fn config(&self) -> Arc<Config> {
+        self.config.read().expect("config lock is never poisoned").clone()
+    }
+}
+
 /// Errors cross into the window as plain messages.
 type CmdResult<T> = Result<T, String>;
 
 async fn status_of(state: &AppState) -> CmdResult<Status> {
-    let config = &state.config;
+    let config = state.config();
     let (has_wallet, balances, progress) = match Wallet::open(&config.wallet_dir, config.network) {
         Ok(wallet) => (
             true,
@@ -133,7 +140,7 @@ async fn restore_wallet(
     let phrase = SecretString::new(phrase);
     {
         let _guard = state.busy.lock().await;
-        let config = &state.config;
+        let config = state.config();
         let wallet = Wallet::restore(
             &config.wallet_dir,
             config.network,
@@ -155,8 +162,8 @@ async fn restore_wallet(
 async fn sync_wallet(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Status> {
     {
         let _guard = state.busy.lock().await;
-        let config = &state.config;
-        open_wallet(config)?
+        let config = state.config();
+        open_wallet(&config)?
             .sync(&config.sync_server)
             .await
             .map_err(|e| e.to_string())?;
@@ -167,36 +174,44 @@ async fn sync_wallet(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Status
 /// Every transaction FERRY has sent for this wallet, newest first.
 #[tauri::command]
 async fn get_history(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Vec<HistoryEntry>> {
-    open_wallet(&state.config)?
+    open_wallet(&state.config())?
         .history()
         .map_err(|e| e.to_string())
 }
 
-/// Switches to another network and restarts FERRY on it. Each network keeps its own wallet, and a
-/// running migration must finish first so its crossings keep their schedule.
+/// Switches to another network in place. Each network keeps its own wallet, and a running
+/// migration must finish first so its crossings keep their schedule.
 #[tauri::command]
 async fn set_network(
     app: AppHandle,
     state: tauri::State<'_, Arc<AppState>>,
     network: String,
-) -> CmdResult<()> {
-    if !NETWORKS.contains(&network.as_str()) {
+) -> CmdResult<Status> {
+    let Some(&name) = NETWORKS.iter().find(|n| **n == network) else {
         return Err(format!("unknown network {network}"));
+    };
+    {
+        let _guard = state.busy.lock().await;
+        let mut scheduler = state.scheduler.lock().await;
+        if scheduler.running {
+            return Err("a migration is running on this network; switch when it has finished".into());
+        }
+        let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+        std::fs::write(data_dir.join(NETWORK_FILE), name).map_err(|e| e.to_string())?;
+        *state.config.write().expect("config lock is never poisoned") =
+            Arc::new(network_config(name, &data_dir));
+        *scheduler = SchedulerState::default();
     }
-    if state.scheduler.lock().await.running {
-        return Err("a migration is running on this network; switch when it has finished".into());
-    }
-    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
-    std::fs::write(data_dir.join(NETWORK_FILE), &network).map_err(|e| e.to_string())?;
-    app.restart()
+    resume(app.clone(), state.inner().clone()).await;
+    status_of(&state).await
 }
 
 /// Previews the next migration run for the consent screen. Nothing is changed.
 #[tauri::command]
 async fn plan_migration(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Option<PlanPreview>> {
     let _guard = state.busy.lock().await;
-    open_wallet(&state.config)?
+    open_wallet(&state.config())?
         .plan_migration()
         .map_err(|e| e.to_string())
 }
@@ -212,7 +227,7 @@ async fn commit_migration(
     let phrase = SecretString::new(phrase);
     {
         let _guard = state.busy.lock().await;
-        open_wallet(&state.config)?
+        open_wallet(&state.config())?
             .commit_migration(phrase)
             .map_err(|e| e.to_string())?;
         state.scheduler.lock().await.follow_up = None;
@@ -225,7 +240,7 @@ async fn commit_migration(
 
 /// Updates the tray's status line from the wallet's migration progress.
 async fn refresh_tray(app: &AppHandle, state: &AppState) {
-    let progress = open_wallet(&state.config)
+    let progress = open_wallet(&state.config())
         .and_then(|w| w.migration_progress().map_err(|e| e.to_string()))
         .ok()
         .flatten();
@@ -247,8 +262,8 @@ fn pending_follow_up(config: &Config) -> Option<PlanPreview> {
 /// hold the next one back by a fresh random delay instead of sending it right away.
 async fn defer_overdue(state: &AppState) {
     let _guard = state.busy.lock().await;
-    if let Ok(wallet) = open_wallet(&state.config) {
-        match wallet.defer_overdue_crossings(&state.config.sync_server).await {
+    if let Ok(wallet) = open_wallet(&state.config()) {
+        match wallet.defer_overdue_crossings(&state.config().sync_server).await {
             Ok(Some(height)) => log::info!("overdue crossings: next one not before block {height}"),
             Ok(None) => {}
             Err(e) => log::warn!("could not check for overdue crossings: {e}"),
@@ -272,16 +287,16 @@ async fn start_scheduler(app: AppHandle, state: Arc<AppState>) {
         loop {
             // A tick far later than scheduled means the computer slept (or the process was
             // suspended): treat it like a relaunch and space out whatever became overdue.
-            if last_tick.elapsed() > state.config.session_interval + Duration::from_secs(300) {
+            if last_tick.elapsed() > state.config().session_interval + Duration::from_secs(300) {
                 defer_overdue(&state).await;
             }
             last_tick = Instant::now();
 
             let result = {
                 let _guard = state.busy.lock().await;
-                match open_wallet(&state.config) {
+                match open_wallet(&state.config()) {
                     Ok(wallet) => wallet
-                        .run_session(&state.config.sync_server, &state.config.broadcast_server)
+                        .run_session(&state.config().sync_server, &state.config().broadcast_server)
                         .await
                         .map_err(|e| e.to_string()),
                     Err(e) => Err(e),
@@ -334,9 +349,67 @@ async fn start_scheduler(app: AppHandle, state: Arc<AppState>) {
                 refresh_tray(&app, &state).await;
                 break;
             }
-            tokio::time::sleep(state.config.session_interval).await;
+            tokio::time::sleep(state.config().session_interval).await;
         }
     });
+}
+
+/// The settings for one network. Each network keeps its own wallet folder.
+fn network_config(network_name: &'static str, data_dir: &std::path::Path) -> Config {
+    let (network, sync_server, broadcast_server, wallets_url, session_interval) =
+        match network_name {
+            // The hosted demo chain (deploy/demo-server): fake coins, served over HTTPS. It
+            // uses regtest/heights.env: upgrades through NU6.2 at 1, NU6.3 at 300.
+            "demo" => (
+                FerryNetwork::regtest(1, 300),
+                Server::new(DEMO_SYNC_HOST, 443),
+                Server::new(DEMO_SEND_HOST, 443),
+                Some(DEMO_WALLETS_URL),
+                Duration::from_secs(3),
+            ),
+            // Mainnet makes a block every 75 seconds; checking every 20 is plenty.
+            "mainnet" => (
+                FerryNetwork::Main,
+                Server::new(MAINNET_SYNC.0, MAINNET_SYNC.1),
+                Server::new(MAINNET_SEND.0, MAINNET_SEND.1),
+                None,
+                Duration::from_secs(20),
+            ),
+            _ => (
+                FerryNetwork::regtest(1, 300),
+                Server::new("127.0.0.1", 9067),
+                Server::new("127.0.0.1", 9077),
+                None,
+                Duration::from_secs(3),
+            ),
+        };
+    Config {
+        network,
+        network_name,
+        sync_server,
+        broadcast_server,
+        wallets_url,
+        wallet_dir: data_dir.join("wallets").join(network_name),
+        session_interval,
+    }
+}
+
+/// Picks up where this network's wallet left off: restarts the scheduler for a migration in
+/// progress, or restores a pending follow-up run.
+async fn resume(handle: AppHandle, state: Arc<AppState>) {
+    let config = state.config();
+    let in_progress = Wallet::open(&config.wallet_dir, config.network)
+        .and_then(|w| w.migration_progress())
+        .map(|p| p.is_some_and(|p| p.active))
+        .unwrap_or(false);
+    if in_progress {
+        start_scheduler(handle.clone(), state.clone()).await;
+    } else if let Some(preview) = pending_follow_up(&config) {
+        // A run finished earlier and left balance for a follow-up run the user has not signed
+        // yet: come back up in that state rather than forgetting it.
+        state.scheduler.lock().await.follow_up = Some(preview);
+    }
+    refresh_tray(&handle, &state).await;
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -372,49 +445,13 @@ pub fn run() {
                 _ if cfg!(debug_assertions) => "local",
                 _ => "demo",
             };
-            let (network, sync_server, broadcast_server, wallets_url, session_interval) =
-                match network_name {
-                    // The hosted demo chain (deploy/demo-server): fake coins, served over HTTPS.
-                    // It uses regtest/heights.env: upgrades through NU6.2 at 1, NU6.3 at 300.
-                    "demo" => (
-                        FerryNetwork::regtest(1, 300),
-                        Server::new(DEMO_SYNC_HOST, 443),
-                        Server::new(DEMO_SEND_HOST, 443),
-                        Some(DEMO_WALLETS_URL),
-                        Duration::from_secs(3),
-                    ),
-                    // Mainnet makes a block every 75 seconds; checking every 20 is plenty.
-                    "mainnet" => (
-                        FerryNetwork::Main,
-                        Server::new(MAINNET_SYNC.0, MAINNET_SYNC.1),
-                        Server::new(MAINNET_SEND.0, MAINNET_SEND.1),
-                        None,
-                        Duration::from_secs(20),
-                    ),
-                    _ => (
-                        FerryNetwork::regtest(1, 300),
-                        Server::new("127.0.0.1", 9067),
-                        Server::new("127.0.0.1", 9077),
-                        None,
-                        Duration::from_secs(3),
-                    ),
-                };
+            let mut config = network_config(network_name, &data_dir);
             // FERRY_WALLET_DIR lets a demo point the app at a prepared wallet folder.
-            let wallet_dir = match std::env::var_os("FERRY_WALLET_DIR") {
-                Some(dir) => PathBuf::from(dir),
-                None => data_dir.join("wallets").join(network_name),
-            };
-            let config = Config {
-                network,
-                network_name,
-                sync_server,
-                broadcast_server,
-                wallets_url,
-                wallet_dir,
-                session_interval,
-            };
+            if let Some(dir) = std::env::var_os("FERRY_WALLET_DIR") {
+                config.wallet_dir = PathBuf::from(dir);
+            }
             let state = Arc::new(AppState {
-                config,
+                config: std::sync::RwLock::new(Arc::new(config)),
                 busy: Mutex::new(()),
                 scheduler: Mutex::new(SchedulerState::default()),
             });
@@ -422,21 +459,7 @@ pub fn run() {
 
             // Resume a migration that was in progress when the app last closed (ZIP 318:
             // reconcile on launch). The scheduler spaces overdue crossings out; it never bursts.
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let in_progress = Wallet::open(&state.config.wallet_dir, state.config.network)
-                    .and_then(|w| w.migration_progress())
-                    .map(|p| p.is_some_and(|p| p.active))
-                    .unwrap_or(false);
-                if in_progress {
-                    start_scheduler(handle.clone(), state.clone()).await;
-                } else if let Some(preview) = pending_follow_up(&state.config) {
-                    // A run finished earlier and left balance for a follow-up run the user has
-                    // not signed yet: come back up in that state rather than forgetting it.
-                    state.scheduler.lock().await.follow_up = Some(preview);
-                }
-                refresh_tray(&handle, &state).await;
-            });
+            tauri::async_runtime::spawn(resume(app.handle().clone(), state));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
