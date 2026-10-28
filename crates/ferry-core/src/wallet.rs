@@ -93,6 +93,7 @@ impl Wallet {
             .await?;
 
         std::fs::create_dir_all(&dir)?;
+        make_private(&dir)?;
         let mut db = open_db(&db_path, network)?;
         init_wallet_db(&mut db, None).map_err(|e| Error::Wallet(e.to_string()))?;
         db.create_account("FERRY", &seed, &birthday, None)
@@ -107,6 +108,8 @@ impl Wallet {
         if !dir.join(WALLET_DB).exists() {
             return Err(Error::NoWallet(dir.display().to_string()));
         }
+        // Wallets created before folders were made private get tightened here.
+        make_private(&dir)?;
         Ok(Wallet { dir, network })
     }
 
@@ -160,6 +163,20 @@ impl Wallet {
     }
 }
 
+/// Restricts the wallet folder to its owner. The database holds the viewing key, which shows the
+/// whole wallet history, and other accounts on the same computer must not be able to read it.
+/// On Windows the per-user app data folder is already private.
+fn make_private(dir: &Path) -> Result<(), Error> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
+    Ok(())
+}
+
 fn open_db(path: &Path, network: FerryNetwork) -> Result<Db, Error> {
     WalletDb::for_path(path, network, SystemClock, UnwrapErr(SysRng))
         .map_err(|e| Error::Wallet(e.to_string()))
@@ -204,5 +221,25 @@ async fn account_birthday(
             .into_inner();
         AccountBirthday::from_treestate(treestate, Some(tip))
             .map_err(|_| Error::Wallet("the server returned an unreadable tree state".into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn wallet_folders_are_private_to_their_owner() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("ferry-private-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        make_private(&dir).unwrap();
+
+        let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+        std::fs::remove_dir(&dir).unwrap();
+        assert_eq!(mode, 0o700);
     }
 }
