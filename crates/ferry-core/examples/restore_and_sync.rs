@@ -2,6 +2,8 @@
 //!
 //! Usage (local regtest chain from `regtest/setup-demo.sh`):
 //!   echo "<phrase>" | cargo run -p ferry-core --example restore_and_sync -- <dir> <birthday> [server]
+//!
+//! FERRY_CHAIN=main (or test) restores on mainnet (or testnet) instead of the local regtest chain.
 
 use std::io::Read;
 
@@ -16,8 +18,12 @@ async fn main() -> anyhow::Result<()> {
     let dir = args.next().expect("usage: <dir> <birthday> [server]");
     let birthday: u32 = args.next().expect("usage: <dir> <birthday> [server]").parse()?;
     let server = Server::parse(&args.next().unwrap_or_else(|| "127.0.0.1:9067".into()))?;
-    // Matches regtest/heights.env.
-    let network = FerryNetwork::regtest(1, 300);
+    let network = match std::env::var("FERRY_CHAIN").as_deref() {
+        Ok("main") => FerryNetwork::Main,
+        Ok("test") => FerryNetwork::Test,
+        // Matches regtest/heights.env.
+        _ => FerryNetwork::regtest(1, 300),
+    };
 
     let wallet = match Wallet::open(&dir, network) {
         Ok(wallet) => wallet,
