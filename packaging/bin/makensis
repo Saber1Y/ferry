@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Stands in for makensis during `packaging/build.sh windows`.
+# Homebrew's makensis 3.13 crashes (std::bad_alloc) on Tauri's installer script, and Ubuntu 22.04's
+# NSIS 3.08 lacks Win\RestartManager.nsh, so this runs Debian 13's NSIS 3.11 in a container.
+# The repo and Tauri's cache are mounted at their host paths, because installer.nsi refers to both.
+set -euo pipefail
+
+IMAGE=ferry-nsis:3.11
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+TAURI_CACHE="$HOME/Library/Caches/tauri"
+
+if ! docker image inspect "$IMAGE" > /dev/null 2>&1; then
+  docker build -q -t "$IMAGE" - > /dev/null <<'EOF'
+FROM debian:trixie
+RUN apt-get update -qq && apt-get install -y -qq nsis > /dev/null && rm -rf /var/lib/apt/lists/*
+EOF
+fi
+
+mkdir -p "$TAURI_CACHE"
+exec docker run --rm -i --platform linux/arm64 \
+  -v "$ROOT:$ROOT" \
+  -v "$TAURI_CACHE:$TAURI_CACHE:ro" \
+  -w "$PWD" \
+  "$IMAGE" makensis "$@"
