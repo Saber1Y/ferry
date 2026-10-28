@@ -248,7 +248,7 @@ flowchart TB
 **Writes** (broadcast server): preparation transactions (shielded Orchard sends to self) and crossings (Orchard to Ironwood transfers in canonical amounts), one per broadcast session.
 
 The demo chain is a regtest Zebra node with NU6.3 at block 300; its lightwalletd servers are at `sync.ferry.162-62-231-147.sslip.io:443` and `send.ferry.162-62-231-147.sslip.io:443`.
-Mainnet NU6.3 activates at block 3,428,143; `ferry-core` carries mainnet's parameters, but the app offers only the demo chain and the local regtest chain in this build.
+NU6.3 activated on mainnet at block 3,428,143 (in the summer of 2026), so mainnet Orchard holders are migrating now; `ferry-core` carries mainnet's parameters, but the app offers only the demo chain and the local regtest chain in this build.
 
 ## Engineering decisions and the hard problems
 
