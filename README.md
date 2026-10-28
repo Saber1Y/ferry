@@ -285,7 +285,7 @@ The demo chain is a regtest Zebra node with NU6.3 at block 300, and it enforces 
 | Apple silicon macOS installer | Real - migrations on the demo chain |
 | Windows installer | Built and checked for missing DLLs; not yet run on Windows |
 | Linux AppImage | Built from the same app as the tested `.deb`; not run on its own |
-| Mainnet mode | Real - restores and syncs a wallet to the live mainnet tip through two independent public servers, both verified on NU6.3 |
+| Mainnet mode | Real - [mainnet readiness](evidence/mainnet-readiness): a wallet restored to the live mainnet tip from the app, through two independent public servers, both verified on NU6.3 |
 | Demo chain enforces mainnet's rules | Real - both report consensus branch `37a5165b` |
 | A migration on mainnet | Not yet established - it needs a wallet that already held Orchard funds before NU6.3, because nobody can receive Orchard funds since |
 | Tor for server connections | Not yet established - servers can see the user's IP address |
