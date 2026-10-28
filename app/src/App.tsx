@@ -53,6 +53,8 @@ export default function App() {
   if (status && !status.hasWallet) {
     page = (
       <Restore
+        // A new network brings its own defaults (the birthday), so start the form afresh.
+        key={status.network}
         network={status.network}
         defaultBirthday={status.defaultBirthday}
         demoWalletsUrl={status.demoWalletsUrl}

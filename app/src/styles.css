@@ -120,6 +120,8 @@ body {
 .rail-facts {
   margin: 8px 0 0;
   display: grid;
+  /* minmax(0, …) lets long server names wrap instead of widening the rail. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -133,6 +135,7 @@ body {
 .rail-facts dd {
   margin: 2px 0 0;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .badge {
