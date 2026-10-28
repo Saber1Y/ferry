@@ -1,17 +1,34 @@
 import { useState, type FormEvent } from "react";
-import { errorMessage, fetchDemoWallet, restoreWallet, sentence, type Status } from "./api";
+import {
+  errorMessage,
+  fetchDemoWallet,
+  restoreWallet,
+  sentence,
+  setNetwork,
+  type Status,
+} from "./api";
 
 const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
 
+const NETWORK_LABELS: Record<string, { name: string; detail: string }> = {
+  demo: { name: "Demo chain", detail: "fake coins" },
+  mainnet: { name: "Mainnet", detail: "real ZEC" },
+};
+
 export default function Restore({
+  network,
+  networks,
   defaultBirthday,
   demoWalletsUrl,
   onRestored,
 }: {
+  network: string;
+  networks: string[];
   defaultBirthday: number;
   demoWalletsUrl: string | null;
   onRestored: (s: Status) => void;
 }) {
+  const [switching, setSwitching] = useState(false);
   const [fetchingDemo, setFetchingDemo] = useState(false);
   const [phrase, setPhrase] = useState("");
   const [birthday, setBirthday] = useState(String(defaultBirthday));
@@ -37,6 +54,18 @@ export default function Restore({
       setError(`Could not get a demo wallet: ${errorMessage(err)}.`);
     } finally {
       setFetchingDemo(false);
+    }
+  }
+
+  async function switchNetwork(next: string) {
+    if (next === network || switching) return;
+    setSwitching(true);
+    setError(null);
+    try {
+      await setNetwork(next);
+    } catch (err) {
+      setError(`Could not switch network: ${errorMessage(err)}.`);
+      setSwitching(false);
     }
   }
 
@@ -69,6 +98,34 @@ export default function Restore({
         Zodl: Settings, Recovery phrase). Your wallet keeps working as before; FERRY keeps only a
         view-only copy and asks for the phrase again just once, to sign.
       </p>
+
+      {networks.length > 1 && (
+        <div className="network-switch" role="group" aria-label="Network">
+          {networks.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={n === network ? "network-option network-option-active" : "network-option"}
+              aria-pressed={n === network}
+              onClick={() => switchNetwork(n)}
+              disabled={switching || busy}
+            >
+              <span className="network-name">{NETWORK_LABELS[n]?.name ?? n}</span>
+              <span className="network-detail">{NETWORK_LABELS[n]?.detail}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {network === "mainnet" && (
+        <div className="notice notice-mainnet" role="note">
+          <strong>Mainnet is experimental.</strong> FERRY has migrated wallets end to end on demo
+          chains; on mainnet, start with a small amount you can afford to lose. It syncs from{" "}
+          <span className="mono">zec.rocks</span> and broadcasts through{" "}
+          <span className="mono">zcash.mysideoftheweb.com</span>, two different operators, without
+          Tor, so they can see your IP address.
+        </div>
+      )}
 
       {demoWalletsUrl && (
         <div className="demo-offer">
@@ -129,9 +186,9 @@ export default function Restore({
             disabled={busy}
           />
           <span className="hint">
-            The block your wallet was created at. Funds received before it are never scanned, so
-            they would be left behind. If you are unsure, keep the default: FERRY scans from the
-            start, which is slower but misses nothing.
+            {network === "mainnet"
+              ? "The block your wallet was created at (your wallet app shows it, often under Advanced or Wallet birthday). Funds received before it are never scanned. The default is the start of Orchard, which misses nothing but can take hours to scan."
+              : "The block your wallet was created at. Funds received before it are never scanned, so they would be left behind. If you are unsure, keep the default: FERRY scans from the start, which is slower but misses nothing."}
           </span>
         </label>
 

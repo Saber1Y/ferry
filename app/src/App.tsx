@@ -34,6 +34,8 @@ export default function App() {
   if (status && !status.hasWallet) {
     page = (
       <Restore
+        network={status.network}
+        networks={status.networks}
         defaultBirthday={status.defaultBirthday}
         demoWalletsUrl={status.demoWalletsUrl}
         onRestored={setStatus}

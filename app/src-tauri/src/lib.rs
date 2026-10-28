@@ -23,8 +23,17 @@ const DEMO_SYNC_HOST: &str = "sync.ferry.162-62-231-147.sslip.io";
 const DEMO_SEND_HOST: &str = "send.ferry.162-62-231-147.sslip.io";
 const DEMO_WALLETS_URL: &str = "https://wallets.ferry.162-62-231-147.sslip.io/demo-wallet";
 
-/// Settings the app runs with. The hackathon build runs against regtest chains only (the hosted
-/// demo chain, or one on this computer); mainnet is not enabled yet.
+/// Mainnet: public lightwalletd servers run by two different operators, so the one FERRY syncs
+/// from never sees what it broadcasts. Both serve NU6.3 (consensus branch 37a5165b).
+const MAINNET_SYNC: (&str, u16) = ("zec.rocks", 443);
+const MAINNET_SEND: (&str, u16) = ("zcash.mysideoftheweb.com", 9067);
+
+/// The networks the window can switch between. The choice is kept in the app data folder.
+const NETWORKS: [&str; 2] = ["demo", "mainnet"];
+const NETWORK_FILE: &str = "network";
+
+/// Settings the app runs with: the hosted demo chain (fake coins), mainnet (experimental), or a
+/// regtest chain on this computer in development.
 struct Config {
     network: FerryNetwork,
     network_name: &'static str,
@@ -67,6 +76,8 @@ struct Status {
     default_birthday: u32,
     /// Where to fetch a demo wallet, on the hosted demo chain.
     demo_wallets_url: Option<&'static str>,
+    /// Networks the window offers to switch to (empty in development, which uses `local`).
+    networks: Vec<&'static str>,
     has_wallet: bool,
     balances: Option<Balances>,
     progress: Option<Progress>,
@@ -92,6 +103,7 @@ async fn status_of(state: &AppState) -> CmdResult<Status> {
         broadcast_server: config.broadcast_server.to_string(),
         default_birthday: config.network.lowest_birthday(),
         demo_wallets_url: config.wallets_url,
+        networks: if config.network_name == "local" { vec![] } else { NETWORKS.to_vec() },
         has_wallet,
         balances,
         progress,
@@ -158,6 +170,26 @@ async fn get_history(state: tauri::State<'_, Arc<AppState>>) -> CmdResult<Vec<Hi
     open_wallet(&state.config)?
         .history()
         .map_err(|e| e.to_string())
+}
+
+/// Switches to another network and restarts FERRY on it. Each network keeps its own wallet, and a
+/// running migration must finish first so its crossings keep their schedule.
+#[tauri::command]
+async fn set_network(
+    app: AppHandle,
+    state: tauri::State<'_, Arc<AppState>>,
+    network: String,
+) -> CmdResult<()> {
+    if !NETWORKS.contains(&network.as_str()) {
+        return Err(format!("unknown network {network}"));
+    }
+    if state.scheduler.lock().await.running {
+        return Err("a migration is running on this network; switch when it has finished".into());
+    }
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    std::fs::write(data_dir.join(NETWORK_FILE), &network).map_err(|e| e.to_string())?;
+    app.restart()
 }
 
 /// Previews the next migration run for the consent screen. Nothing is changed.
@@ -328,42 +360,58 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            // FERRY_WALLET_DIR lets a demo point the app at a prepared wallet folder.
-            // Which network to run against: the hosted demo chain by default in release
-            // builds, this computer's regtest chain in development. FERRY_NETWORK overrides.
-            let network_name = match std::env::var("FERRY_NETWORK").as_deref() {
-                Ok("local") => "local",
-                Ok("demo") => "demo",
+            // Which network to run against: FERRY_NETWORK if set, else the one chosen in the
+            // window, else the hosted demo chain in release builds and this computer's regtest
+            // chain in development.
+            let data_dir = app.path().app_data_dir()?;
+            let chosen = std::fs::read_to_string(data_dir.join(NETWORK_FILE)).ok();
+            let network_name = match std::env::var("FERRY_NETWORK").ok().or(chosen).as_deref() {
+                Some("local") => "local",
+                Some("demo") => "demo",
+                Some("mainnet") => "mainnet",
                 _ if cfg!(debug_assertions) => "local",
                 _ => "demo",
             };
-            let (sync_server, broadcast_server, wallets_url) = match network_name {
-                // The hosted demo chain (deploy/demo-server): fake coins, served over HTTPS.
-                "demo" => (
-                    Server::new(DEMO_SYNC_HOST, 443),
-                    Server::new(DEMO_SEND_HOST, 443),
-                    Some(DEMO_WALLETS_URL),
-                ),
-                _ => (
-                    Server::new("127.0.0.1", 9067),
-                    Server::new("127.0.0.1", 9077),
-                    None,
-                ),
-            };
+            let (network, sync_server, broadcast_server, wallets_url, session_interval) =
+                match network_name {
+                    // The hosted demo chain (deploy/demo-server): fake coins, served over HTTPS.
+                    // It uses regtest/heights.env: upgrades through NU6.2 at 1, NU6.3 at 300.
+                    "demo" => (
+                        FerryNetwork::regtest(1, 300),
+                        Server::new(DEMO_SYNC_HOST, 443),
+                        Server::new(DEMO_SEND_HOST, 443),
+                        Some(DEMO_WALLETS_URL),
+                        Duration::from_secs(3),
+                    ),
+                    // Mainnet makes a block every 75 seconds; checking every 20 is plenty.
+                    "mainnet" => (
+                        FerryNetwork::Main,
+                        Server::new(MAINNET_SYNC.0, MAINNET_SYNC.1),
+                        Server::new(MAINNET_SEND.0, MAINNET_SEND.1),
+                        None,
+                        Duration::from_secs(20),
+                    ),
+                    _ => (
+                        FerryNetwork::regtest(1, 300),
+                        Server::new("127.0.0.1", 9067),
+                        Server::new("127.0.0.1", 9077),
+                        None,
+                        Duration::from_secs(3),
+                    ),
+                };
             // FERRY_WALLET_DIR lets a demo point the app at a prepared wallet folder.
             let wallet_dir = match std::env::var_os("FERRY_WALLET_DIR") {
                 Some(dir) => PathBuf::from(dir),
-                None => app.path().app_data_dir()?.join("wallets").join(network_name),
+                None => data_dir.join("wallets").join(network_name),
             };
             let config = Config {
-                // Both chains use regtest/heights.env: upgrades through NU6.2 at 1, NU6.3 at 300.
-                network: FerryNetwork::regtest(1, 300),
+                network,
                 network_name,
                 sync_server,
                 broadcast_server,
                 wallets_url,
                 wallet_dir,
-                session_interval: Duration::from_secs(3),
+                session_interval,
             };
             let state = Arc::new(AppState {
                 config,
@@ -397,7 +445,8 @@ pub fn run() {
             sync_wallet,
             plan_migration,
             commit_migration,
-            get_history
+            get_history,
+            set_network
         ])
         // Closing the window keeps FERRY in the tray, so a migration keeps running; quitting is
         // done from the tray menu.
